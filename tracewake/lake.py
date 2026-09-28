@@ -21,14 +21,23 @@ from .proof import Check
 
 VALUE_COL, KEY_COL, META_COL = "_kafka_value", "_kafka_key", "_kafka_metadata"
 
+TYPED_COLUMNS = ("run_id", "seq", "type", "data_json")
+
+
 # The table-topic settings the topic is created with (per-topic configs, AutoMQ 1.6+).
-def table_topic_configs(commit_interval_ms: int = 2000) -> Dict[str, str]:
-    return {
+def table_topic_configs(commit_interval_ms: int = 2000, typed: bool = False) -> Dict[str, str]:
+    cfg = {
         "automq.table.topic.enable": "true",
-        "automq.table.topic.convert.value.type": "string",   # the envelope is JSON text; no schema registry
         "automq.table.topic.convert.key.type": "string",
         "automq.table.topic.commit.interval.ms": str(commit_interval_ms),
     }
+    if typed:
+        # Avro in the Confluent wire format, looked up by schema id; flatten makes each field a column.
+        cfg["automq.table.topic.convert.value.type"] = "by_schema_id"
+        cfg["automq.table.topic.transform.value.type"] = "flatten"
+    else:
+        cfg["automq.table.topic.convert.value.type"] = "string"   # the envelope as JSON text; no registry
+    return cfg
 
 
 def catalog_properties(uri: str, s3_endpoint: str, access_key: str, secret_key: str,
@@ -73,8 +82,11 @@ def _as_text(value: Any) -> str:
 
 
 def parse_rows(arrow_table) -> LakeRows:
-    """Rows of the Iceberg table as parsed envelopes. Works on the columns Table Topic writes."""
+    """Rows of the Iceberg table as parsed envelopes. Works on both layouts Table Topic writes:
+    one string value column, or typed columns from an Avro schema flattened into the table."""
     names = set(arrow_table.column_names)
+    if VALUE_COL not in names and set(TYPED_COLUMNS) <= names:
+        return _parse_typed(arrow_table)
     missing = [c for c in (VALUE_COL, KEY_COL, META_COL) if c not in names]
     if missing:
         raise ValueError(f"table lacks the Table Topic columns {missing}; has {sorted(names)}")
@@ -92,6 +104,47 @@ def parse_rows(arrow_table) -> LakeRows:
                            partition=meta.get("partition"), offset=meta.get("offset"),
                            timestamp=meta.get("timestamp"), envelope=env))
     return LakeRows(out, invalid)
+
+
+def _parse_typed(arrow_table) -> LakeRows:
+    from .codec import from_avro_record
+    out: List[LakeRow] = []
+    invalid = 0
+    for rec in arrow_table.to_pylist():
+        meta = rec.get(META_COL) or {}
+        key = _as_text(rec.get(KEY_COL))
+        try:
+            env: Optional[TraceEnvelope] = from_avro_record(rec)
+            text = env.to_json().decode("utf-8")
+        except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+            env, text, invalid = None, "", invalid + 1
+        out.append(LakeRow(run_id=env.run_id if env else "", key=key, value=text, partition=meta.get("partition"),
+                           offset=meta.get("offset"), timestamp=meta.get("timestamp"), envelope=env))
+    return LakeRows(out, invalid)
+
+
+TYPED_QUERY = {
+    "tool decisions by capability, typed columns only": """
+        SELECT capability,
+               CASE type WHEN 'tool_call_allowed' THEN 'ALLOWED' ELSE 'DENIED' END AS decision,
+               COUNT(DISTINCT id) AS decisions
+        FROM iceberg WHERE type IN ('tool_call_allowed', 'tool_call_denied')
+        GROUP BY 1, 2 ORDER BY 1, 2""",
+}
+
+
+def typed_queries(arrow_table) -> Dict[str, Dict[str, Any]]:
+    """Queries straight over the Iceberg table's typed columns: no JSON functions needed."""
+    import duckdb
+    con = duckdb.connect()
+    con.register("iceberg", arrow_table)
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, sql in TYPED_QUERY.items():
+        rel = con.sql(sql)
+        cols = rel.columns
+        out[name] = {"sql": " ".join(sql.split()), "columns": cols, "rows": [dict(zip(cols, r)) for r in rel.fetchall()]}
+    con.close()
+    return out
 
 
 def normalised_table(rows: LakeRows):
@@ -231,9 +284,12 @@ class LakeReport:
                  f"| Time from last publish to full visibility in the table | {n['visible_after_s']:.1f} s |",
                  f"| Table Topic commit interval | {n['commit_interval_ms']} ms |",
                  f"| Snapshot id | {n.get('snapshot_id', '?')} |",
+                 f"| Table layout | {n.get('layout', 'string value')} |",
                  "", "## Checks", "", "| Check | Result | Detail |", "|---|---|---|"]
         for c in self.checks:
             lines.append(f"| {c.name} | {'pass' if c.passed else 'FAIL'} | {c.detail.replace('|', '/')} |")
+        if n.get("iceberg_schema"):
+            lines += ["", "## Iceberg schema written by the broker", "", "```"] + list(n["iceberg_schema"]) + ["```"]
         lines += ["", "## SQL over the agent's history", ""]
         for name, q in self.sql.items():
             lines += [f"### {name}", "", "```sql", q["sql"], "```", ""]
@@ -246,7 +302,7 @@ class LakeReport:
 
 
 def run_lake(catalog_props: Dict[str, str], namespace: str, topic: str, ledger: WakeLedger, published: int, *,
-             commit_interval_ms: int, timeout_s: float = 180.0) -> LakeReport:
+             commit_interval_ms: int, timeout_s: float = 180.0, typed: bool = False) -> LakeReport:
     from pyiceberg.catalog import load_catalog
     import duckdb
     import pyiceberg
@@ -256,12 +312,22 @@ def run_lake(catalog_props: Dict[str, str], namespace: str, topic: str, ledger: 
     rows = parse_rows(arrow)
     checks = compare(rows, ledger, published)
     sql = sql_queries(rows)
+    layout = "string value (JSON text)"
+    schema_lines: List[str] = []
+    if typed:
+        typed_ok = set(TYPED_COLUMNS) <= set(arrow.column_names) and VALUE_COL not in arrow.column_names
+        checks.append(Check("the table has typed columns from the registered Avro schema", typed_ok,
+                            f"columns: {', '.join(arrow.column_names)}"))
+        if typed_ok:
+            sql = {**typed_queries(arrow), **sql}
+        layout = "typed columns (Avro by schema id, flattened)"
+        schema_lines = [f"{f.name}: {f.field_type}" for f in table.schema().fields]
     distinct = len({(r.envelope.run_id, r.envelope.seq) for r in rows.rows if r.envelope})
     snapshot = table.current_snapshot()
     numbers = {"published": published, "rows": len(rows), "distinct": distinct, "ledger_events": ledger.count(),
                "visible_after_s": waited, "commit_interval_ms": commit_interval_ms,
                "snapshot_id": snapshot.snapshot_id if snapshot else None,
-               "columns": arrow.column_names}
+               "columns": arrow.column_names, "layout": layout, "iceberg_schema": schema_lines}
     environment = {"catalog_uri": catalog_props.get("uri"), "pyiceberg": pyiceberg.__version__,
                    "duckdb": duckdb.__version__,
                    "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}

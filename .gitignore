@@ -8,6 +8,7 @@ dist/
 .pytest_cache/
 
 # Runtime artefacts
+outbox/
 artifacts/
 *.db
 *.sqlite

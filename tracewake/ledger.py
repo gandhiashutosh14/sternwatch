@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 from .bus import Bus, Message
+from .codec import JsonCodec
 from .envelope import TraceEnvelope, digest_envelopes, validate
 
 SCHEMA = """
@@ -55,18 +56,22 @@ class WakeLedger:
         self._db.executescript(SCHEMA)
 
     # ------------------------------------------------------------------ writing
-    def ingest(self, bus: Bus, topic: str) -> IngestStats:
+    def ingest(self, bus: Bus, topic: str, codec=None) -> IngestStats:
         """Read the whole topic from offset zero and insert what is not already present."""
-        return self.ingest_messages(bus.consume(topic))
+        return self.ingest_messages(bus.consume(topic), codec)
 
-    def ingest_messages(self, messages: Iterable[Message]) -> IngestStats:
+    def ingest_messages(self, messages: Iterable[Message], codec=None) -> IngestStats:
+        codec = codec or JsonCodec()
         stats = IngestStats()
         cur = self._db.cursor()
         for m in messages:
             stats.consumed += 1
             try:
-                env = TraceEnvelope.from_json(m.value)
-            except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as e:
+                env = codec.decode(m.value)
+                problems = validate(env.to_dict())
+                if problems:
+                    raise ValueError("; ".join(problems))
+            except (ValueError, UnicodeDecodeError, json.JSONDecodeError, EOFError, KeyError, TypeError) as e:
                 stats.invalid += 1
                 cur.execute("INSERT INTO rejected VALUES (?, ?, ?)", (m.partition, m.offset, str(e)[:500]))
                 continue

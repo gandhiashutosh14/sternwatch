@@ -99,7 +99,10 @@ def extract_decisions(events: List[Dict[str, Any]]) -> Tuple[List[Decision], Dic
                 skipped["budget_denials"] += 1
                 continue
             step, cap = str(d.get("step")), str(d.get("capability"))
-            if step in resolved:
+            if isinstance(d.get("inputs"), dict):
+                # Runtimes that record the arguments the guard saw make the refusal fully replayable.
+                inputs, evidence, missing = dict(d["inputs"]), "resolved", []
+            elif step in resolved:
                 inputs, evidence, missing = resolved[step], "resolved", []
             else:
                 inputs, evidence, missing = _literal_evidence(accepted.get(step))

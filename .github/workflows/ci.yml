@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # The governed-agent-orchestrator revision the live recorder and the constraint cross-check run against.
+  ORCHESTRATOR_REF: f4bb10d
+  CUDA_VISIBLE_DEVICES: ""
+
 jobs:
   unit:
     name: unit tests (Python ${{ matrix.python }})
@@ -22,20 +27,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e ".[dev]"
-      # The orchestrator's guard module is imported (without its heavier dependencies) so the
-      # cross-check test can compare TRACEWAKE's constraint semantics with the original.
-      - run: python -m pip install --no-deps "git+https://github.com/gandhiashutosh14/governed-agent-orchestrator@349d415"
+      - name: Check out the orchestrator next to this repository
+        run: |
+          git clone -q https://github.com/gandhiashutosh14/governed-agent-orchestrator ../governed-agent-orchestrator
+          git -C ../governed-agent-orchestrator checkout -q "$ORCHESTRATOR_REF"
+      - run: python -m pip install -e ".[dev]" -e ../governed-agent-orchestrator
       - run: python -m pytest -q
       - name: Demo on the in-memory log
         run: tracewake demo --out artifacts/demo-memory.md --json artifacts/demo-memory.json
+      - name: Live recording on the in-memory log
+        run: tracewake live --orchestrator ../governed-agent-orchestrator --out artifacts/live-memory.md --json artifacts/live-memory.json
       - uses: actions/upload-artifact@v4
         with:
           name: demo-memory-py${{ matrix.python }}
           path: artifacts/
 
   automq:
-    name: ReplayProof against AutoMQ
+    name: ReplayProof and live recording against AutoMQ
     needs: unit
     runs-on: ubuntu-latest
     steps:
@@ -43,13 +51,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -e .
+      - name: Check out the orchestrator next to this repository
+        run: |
+          git clone -q https://github.com/gandhiashutosh14/governed-agent-orchestrator ../governed-agent-orchestrator
+          git -C ../governed-agent-orchestrator checkout -q "$ORCHESTRATOR_REF"
+      - run: python -m pip install -e . -e ../governed-agent-orchestrator
       - name: Start AutoMQ 1.7.4 with MinIO
         run: docker compose -f docker/compose.yaml up -d
       - name: Wait for the broker
         run: python scripts/wait_for_broker.py localhost:9092 --timeout 240
       - name: ReplayProof
         run: tracewake proof --bootstrap localhost:9092 --out artifacts/replayproof-automq.md --json artifacts/replayproof-automq.json
+      - name: Live recording
+        run: tracewake live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator --out artifacts/live-automq.md --json artifacts/live-automq.json
       - name: Collect broker logs
         if: always()
         run: |
@@ -64,35 +78,47 @@ jobs:
           path: artifacts/
 
   lakemirror:
-    name: LakeMirror against AutoMQ Table Topic
+    name: LakeMirror against AutoMQ Table Topic (${{ matrix.layout }})
     needs: unit
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: [string, typed]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[lake]"
-      - name: Start AutoMQ 1.7.4 with MinIO and an Iceberg REST catalog
+      - name: Start AutoMQ 1.7.4 with MinIO, an Iceberg REST catalog and a schema registry
         run: docker compose -f docker/compose.lake.yaml up -d
       - name: Wait for the broker
         run: python scripts/wait_for_broker.py localhost:9092 --timeout 240
-      - name: Wait for the Iceberg REST catalog
+      - name: Wait for the Iceberg REST catalog and the schema registry
         run: |
           for i in $(seq 1 60); do curl -fsS http://localhost:8181/v1/config > /dev/null && break; sleep 2; done
           curl -fsS http://localhost:8181/v1/config; echo
+          if [ "${{ matrix.layout }}" = "typed" ]; then
+            for i in $(seq 1 90); do curl -fsS http://localhost:8081/subjects > /dev/null && break; sleep 2; done
+            curl -fsS http://localhost:8081/subjects; echo
+          fi
       - name: LakeMirror
-        run: tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --out artifacts/lakemirror-automq.md --json artifacts/lakemirror-automq.json
+        run: |
+          if [ "${{ matrix.layout }}" = "typed" ]; then TYPED="--typed --registry http://localhost:8081"; else TYPED=""; fi
+          tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 $TYPED \
+            --out artifacts/lakemirror-${{ matrix.layout }}.md --json artifacts/lakemirror-${{ matrix.layout }}.json
       - name: Collect logs
         if: always()
         run: |
           mkdir -p artifacts
           docker compose -f docker/compose.lake.yaml logs --no-color server1 > artifacts/automq-server1.log 2>&1 || true
           docker compose -f docker/compose.lake.yaml logs --no-color rest > artifacts/iceberg-rest.log 2>&1 || true
+          docker compose -f docker/compose.lake.yaml logs --no-color schema-registry > artifacts/schema-registry.log 2>&1 || true
           docker compose -f docker/compose.lake.yaml ps > artifacts/compose-ps.txt 2>&1 || true
           docker compose -f docker/compose.lake.yaml down -v || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: lakemirror-automq
+          name: lakemirror-${{ matrix.layout }}
           path: artifacts/

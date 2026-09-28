@@ -15,22 +15,24 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from .bus import Bus
+from .codec import JsonCodec
 from .envelope import PRODUCER_ORCHESTRATOR, TraceEnvelope
 
 
 class Recorder:
     def __init__(self, bus: Bus, topic: str, *, policy_id: Optional[str] = None,
-                 producer: str = PRODUCER_ORCHESTRATOR, partitions: Optional[int] = None):
+                 producer: str = PRODUCER_ORCHESTRATOR, partitions: Optional[int] = None, codec=None):
         self.bus = bus
         self.topic = topic
         self.policy_id = policy_id
         self.producer = producer
         self.published = 0
+        self.codec = codec or JsonCodec()
         self.bus.ensure_topic(topic, partitions)
 
     def __call__(self, event: Any) -> TraceEnvelope:
         env = TraceEnvelope.from_event(event, policy_id=self.policy_id, producer=self.producer)
-        self.bus.publish(self.topic, env.key(), env.to_json())
+        self.bus.publish(self.topic, env.key(), self.codec.encode(env))
         self.published += 1
         return env
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tracewake"
-version = "0.2.0a1"
+version = "0.3.0a1"
 description = "Event-sourced governance for AI agents: publish an agent's decision trace to a Kafka-compatible log, rebuild the ledger from the log alone, and replay recorded decisions under a changed policy."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-lake = ["pyiceberg[pyarrow]>=0.9", "duckdb>=1.0"]
-dev = ["pytest>=8.0", "pyiceberg[pyarrow]>=0.9", "duckdb>=1.0"]
+lake = ["pyiceberg[pyarrow]>=0.9", "duckdb>=1.0", "fastavro>=1.9"]
+dev = ["pytest>=8.0", "pyiceberg[pyarrow]>=0.9", "duckdb>=1.0", "fastavro>=1.9"]
 
 [project.urls]
 Homepage = "https://github.com/gandhiashutosh14/tracewake"

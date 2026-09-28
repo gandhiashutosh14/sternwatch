@@ -2,7 +2,8 @@
 
   tracewake demo   [--from policies/v1.json --to policies/v2.json] [--fixtures fixtures/orchestrator] [--out reports/demo.md]
   tracewake proof  --bootstrap host:9092 [--topic ...] [--from ...] [--to ...] [--fixtures ...] [--out ...] [--json ...]
-  tracewake lake   --bootstrap host:9092 --catalog http://host:8181 --s3-endpoint http://host:9000 [--namespace default] ...
+  tracewake lake   --bootstrap host:9092 --catalog http://host:8181 --s3-endpoint http://host:9000 [--typed --registry URL] ...
+  tracewake live   [--bootstrap host:9092] [--orchestrator ../governed-agent-orchestrator] [--out ...] [--json ...]
   tracewake publish --bootstrap host:9092 --topic T --policy policies/v1.json TRACE.jsonl [TRACE.jsonl ...]
   tracewake ledger --bootstrap host:9092 --topic T --db ledger.db
   tracewake echo   --from policies/v1.json --to policies/v2.json (--fixtures DIR | --db ledger.db) [--out ...] [--json ...]
@@ -73,6 +74,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     lake.add_argument("--namespace", default="default", help="Iceberg namespace the broker writes into")
     lake.add_argument("--commit-interval-ms", type=int, default=2000)
     lake.add_argument("--timeout", type=float, default=240.0, help="seconds to wait for the table to show every row")
+    lake.add_argument("--typed", action="store_true", help="write Avro by schema id so the table gets typed columns")
+    lake.add_argument("--registry", default="http://localhost:8081", help="Confluent-compatible schema registry (with --typed)")
+
+    live = sub.add_parser("live", parents=[pol, rep],
+                          help="run the governed-agent-orchestrator live with a Recorder subscribed, then check the log")
+    live.add_argument("--bootstrap", default=None, help="Kafka-compatible bootstrap server; omit to use the in-memory log")
+    live.add_argument("--topic", default=None)
+    live.add_argument("--partitions", type=int, default=3)
+    live.add_argument("--orchestrator", default=None, help="path to a governed-agent-orchestrator checkout")
 
     pub = sub.add_parser("publish", parents=[kafka], help="publish recorded trace files to a topic")
     pub.add_argument("--policy", default=DEFAULT_OLD, help="policy in force when the traces were recorded")
@@ -103,12 +113,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             from .lake import table_topic_configs
             bus = KafkaBus(args.bootstrap, partitions=args.partitions,
-                           topic_configs=table_topic_configs(args.commit_interval_ms))
-            topic = args.topic or f"tracewake_lake_{int(time.time())}"
+                           topic_configs=table_topic_configs(args.commit_interval_ms, typed=args.typed))
+            topic = args.topic or f"tracewake_lake_{'typed_' if args.typed else ''}{int(time.time())}"
             command = (f"tracewake lake --bootstrap {args.bootstrap} --catalog {args.catalog} "
-                       f"--s3-endpoint {args.s3_endpoint} --topic {topic}")
+                       f"--s3-endpoint {args.s3_endpoint} --topic {topic}" + (f" --typed --registry {args.registry}" if args.typed else ""))
+        codec = None
+        if args.cmd == "lake" and args.typed:
+            from .codec import AvroCodec, SchemaRegistry
+            codec = AvroCodec(SchemaRegistry(args.registry), subject=f"{topic}-value")
         try:
-            report = run_proof(bus, topic, runs, old, new, command=command)
+            report = run_proof(bus, topic, runs, old, new, command=command, codec=codec)
             text = report.render_markdown()
             payload = report.to_dict()
             passed = report.passed
@@ -116,11 +130,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 from .lake import catalog_properties, run_lake
                 published = report.numbers["events"] + report.numbers["duplicates_injected"]
                 ledger = WakeLedger()
-                ledger.ingest(bus, topic)
+                ledger.ingest(bus, topic, codec)
                 lake_report = run_lake(
                     catalog_properties(args.catalog, args.s3_endpoint, args.s3_access_key, args.s3_secret_key, args.s3_region),
                     args.namespace, topic, ledger, published,
-                    commit_interval_ms=args.commit_interval_ms, timeout_s=args.timeout)
+                    commit_interval_ms=args.commit_interval_ms, timeout_s=args.timeout, typed=args.typed)
                 ledger.close()
                 text = text + "\n\n" + lake_report.render_markdown()
                 payload = {"passed": passed and lake_report.passed, "proof": payload, "lake": lake_report.to_dict()}
@@ -131,6 +145,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write(args.json_out, json.dumps(payload, indent=2, default=str) + "\n")
         _out(text)
         return 0 if passed else 1
+
+    if args.cmd == "live":
+        from .live import run_live
+        old, new = Policy.load(args.old), Policy.load(args.new)
+        if args.bootstrap:
+            bus = KafkaBus(args.bootstrap, partitions=args.partitions)
+            topic = args.topic or f"tracewake.live.{int(time.time())}"
+        else:
+            bus, topic = MemoryBus(), args.topic or "tracewake.live"
+        try:
+            report = run_live(bus, topic, old, new, orchestrator_root=args.orchestrator)
+        finally:
+            bus.close()
+        text = report.render_markdown()
+        _write(args.out, text)
+        _write(args.json_out, json.dumps(report.to_dict(), indent=2, default=str) + "\n")
+        _out(text)
+        return 0 if report.passed else 1
 
     if args.cmd == "publish":
         policy = Policy.load(args.policy)

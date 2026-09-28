@@ -4,8 +4,9 @@
 #
 # Adapted from AutoMQ's docker/table_topic/docker-compose.yml at tag 1.7.4 (Apache License 2.0,
 # https://github.com/AutoMQ/automq/blob/1.7.4/docker/table_topic/docker-compose.yml). Changes: the
-# Spark/Jupyter and Schema Registry services are dropped (the value is written as a string, so no
-# registry is needed, and PyIceberg + DuckDB replace Spark); the broker and the catalog are
+# Spark/Jupyter service is dropped (PyIceberg + DuckDB replace it); the Schema Registry is kept for the
+# typed layout and stores its schemas in AutoMQ over an internal listener (server1:19092), while host clients
+# use localhost:9092; the broker and the catalog are
 # published on the host; MinIO-compatible images are the ones AutoMQ's own compose file on main uses
 # (pgsty/silo and pgsty/mc), because the minio/minio and minio/mc images left Docker Hub on 2026-09-19 and their
 # quay.io copies required authentication by 2026-09-28; the REST catalog image is pinned. Heap settings and bucket names are theirs.
@@ -105,20 +106,40 @@ services:
         --override node.id=0 \
         --override controller.quorum.voters=0@server1:9093 \
         --override controller.quorum.bootstrap.servers=server1:9093 \
-        --override advertised.listeners=PLAINTEXT://localhost:9092 \
+        --override listeners=PLAINTEXT://:9092,INTERNAL://:19092,CONTROLLER://:9093 \
+        --override listener.security.protocol.map=PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT \
+        --override advertised.listeners=PLAINTEXT://localhost:9092,INTERNAL://server1:19092 \
+        --override inter.broker.listener.name=INTERNAL \
         --override s3.data.buckets='0@s3://automq-data?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
         --override s3.ops.buckets='1@s3://automq-ops?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
         --override s3.wal.path='0@s3://automq-data?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
         --override automq.table.topic.catalog.type=rest \
         --override automq.table.topic.catalog.uri=http://rest:8181 \
         --override automq.table.topic.catalog.warehouse=s3://warehouse/wh/ \
-        --override automq.table.topic.namespace=default
+        --override automq.table.topic.namespace=default \
+        --override automq.table.topic.schema.registry.url=http://schema-registry:8081
     networks:
       automq_net:
     depends_on:
       - minio
       - mc
       - rest
+
+  schema-registry:
+    container_name: "schema-registry"
+    image: confluentinc/cp-schema-registry:7.9.10
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://server1:19092
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: "1"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      automq_net:
+    depends_on:
+      - server1
 
 networks:
   automq_net:

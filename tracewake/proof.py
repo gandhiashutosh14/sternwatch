@@ -60,7 +60,7 @@ class ProofReport:
         lines = ["# ReplayProof", "",
                  f"**{verdict}**: {sum(c.passed for c in self.checks)} of {len(self.checks)} checks. "
                  f"Generated {env['generated_at']} at revision `{env['revision']}` with `{self.command}`.", "",
-                 f"Log: {env['bus']}. Python {env['python']} on {env['platform']}; tracewake {env['tracewake']}, "
+                 f"Log: {env['bus']}; encoding: {env.get('codec', 'canonical JSON')}. Python {env['python']} on {env['platform']}; tracewake {env['tracewake']}, "
                  f"kafka-python {env['kafka_python']}.", "",
                  "## Numbers", "",
                  "| Measure | Value |", "|---|---|",
@@ -97,12 +97,12 @@ def _kafka_python_version() -> str:
 
 
 def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: Policy, new: Policy, *,
-              ledger_path: str = ":memory:", command: str = "tracewake proof") -> ProofReport:
+              ledger_path: str = ":memory:", command: str = "tracewake proof", codec=None) -> ProofReport:
     checks: List[Check] = []
     numbers: Dict[str, Any] = {}
 
     # 1. Publish every run, keyed by run id, stamped with the policy that was in force.
-    recorder = Recorder(bus, topic, policy_id=old.policy_id)
+    recorder = Recorder(bus, topic, policy_id=old.policy_id, codec=codec)
     t0 = time.perf_counter()
     published = sum(recorder.publish_events(events) for _, events in sorted(runs.items()))
     publish_s = time.perf_counter() - t0
@@ -113,7 +113,7 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
     ledger = WakeLedger(ledger_path)
     ledger.reset()
     t1 = time.perf_counter()
-    stats = ledger.ingest(bus, topic)
+    stats = ledger.ingest(bus, topic, codec)
     ingest_s = time.perf_counter() - t1
     checks.append(Check("every published event reached the ledger", stats.inserted == published and stats.invalid == 0,
                         f"published {published}, consumed {stats.consumed}, inserted {stats.inserted}, invalid {stats.invalid}",
@@ -127,7 +127,7 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
 
     # 3. Destroy the ledger and rebuild it from offset zero.
     ledger.reset()
-    again = ledger.ingest(bus, topic)
+    again = ledger.ingest(bus, topic, codec)
     second = ledger.digests()
     checks.append(Check("ledger is identical after being destroyed and rebuilt from offset 0", second == first and again.inserted == published,
                         f"rebuilt {again.inserted} events; digests equal: {second == first}"))
@@ -135,7 +135,7 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
     # 4. Deliver one run twice; nothing may change.
     dup_run = sorted(runs)[0]
     duplicates = recorder.publish_events(runs[dup_run])
-    third_stats = ledger.ingest(bus, topic)
+    third_stats = ledger.ingest(bus, topic, codec)
     third = ledger.digests()
     checks.append(Check("a run delivered twice changes nothing", third == first and third_stats.inserted == 0
                         and third_stats.duplicates >= duplicates,
@@ -158,7 +158,7 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
                     "ingest_s": ingest_s, "duplicates_injected": duplicates, "decisions": len(report_ledger.rows),
                     "ledger_events": ledger.count()})
     environment = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "revision": _revision(),
-                   "bus": bus.describe(), "python": platform.python_version(), "platform": platform.platform(),
+                   "bus": bus.describe(), "codec": recorder.codec.describe(), "python": platform.python_version(), "platform": platform.platform(),
                    "tracewake": __version__, "kafka_python": _kafka_python_version(), "topic": topic}
     ledger.close()
     return ProofReport(checks, report_ledger, environment, numbers, command)
