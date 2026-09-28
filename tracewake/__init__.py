@@ -6,4 +6,4 @@ re-decides the recorded tool calls under a changed policy without re-executing a
 (PolicyEcho). ReplayProof is the check that all of that actually holds.
 """
 
-__version__ = "0.1.0a1"
+__version__ = "0.2.0a1"

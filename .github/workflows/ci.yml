@@ -62,3 +62,37 @@ jobs:
         with:
           name: replayproof-automq
           path: artifacts/
+
+  lakemirror:
+    name: LakeMirror against AutoMQ Table Topic
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[lake]"
+      - name: Start AutoMQ 1.7.4 with MinIO and an Iceberg REST catalog
+        run: docker compose -f docker/compose.lake.yaml up -d
+      - name: Wait for the broker
+        run: python scripts/wait_for_broker.py localhost:9092 --timeout 240
+      - name: Wait for the Iceberg REST catalog
+        run: |
+          for i in $(seq 1 60); do curl -fsS http://localhost:8181/v1/config > /dev/null && break; sleep 2; done
+          curl -fsS http://localhost:8181/v1/config; echo
+      - name: LakeMirror
+        run: tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --out artifacts/lakemirror-automq.md --json artifacts/lakemirror-automq.json
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker compose -f docker/compose.lake.yaml logs --no-color server1 > artifacts/automq-server1.log 2>&1 || true
+          docker compose -f docker/compose.lake.yaml logs --no-color rest > artifacts/iceberg-rest.log 2>&1 || true
+          docker compose -f docker/compose.lake.yaml ps > artifacts/compose-ps.txt 2>&1 || true
+          docker compose -f docker/compose.lake.yaml down -v || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lakemirror-automq
+          path: artifacts/

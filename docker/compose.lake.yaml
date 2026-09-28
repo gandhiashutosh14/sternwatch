@@ -1,0 +1,125 @@
+# Single-node AutoMQ with Table Topic enabled: MinIO for storage, an Apache Iceberg REST catalog,
+# and the broker configured to write table-topic records into Iceberg. For TRACEWAKE's LakeMirror
+# proof in CI and for local runs (Docker required).
+#
+# Adapted from AutoMQ's docker/table_topic/docker-compose.yml at tag 1.7.4 (Apache License 2.0,
+# https://github.com/AutoMQ/automq/blob/1.7.4/docker/table_topic/docker-compose.yml). Changes: the
+# Spark/Jupyter and Schema Registry services are dropped (the value is written as a string, so no
+# registry is needed, and PyIceberg + DuckDB replace Spark); the broker and the catalog are
+# published on the host; MinIO images come from quay.io (the Docker Hub tags were removed on
+# 2026-09-19); the REST catalog image is pinned. Heap settings and bucket names are theirs.
+#
+#   docker compose -f docker/compose.lake.yaml up -d
+#   python scripts/wait_for_broker.py localhost:9092
+#   tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000
+#   docker compose -f docker/compose.lake.yaml down -v
+
+services:
+  minio:
+    container_name: "minio"
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z.hotfix.7aa24e772
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_DOMAIN=minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: [ "server", "/data", "--console-address", ":9001" ]
+    networks:
+      automq_net:
+        aliases:
+          - warehouse.minio   # virtual-host style S3 addressing used by the Iceberg REST catalog
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://minio:9000/minio/health/live" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  mc:
+    container_name: "mc"
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio http://minio:9000 minioadmin minioadmin) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/automq-data;
+      /usr/bin/mc rm -r --force minio/automq-ops;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/automq-data;
+      /usr/bin/mc mb minio/automq-ops;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc anonymous set public minio/automq-data;
+      /usr/bin/mc anonymous set public minio/automq-ops;
+      /usr/bin/mc anonymous set public minio/warehouse;
+      tail -f /dev/null
+      "
+    networks:
+      - automq_net
+
+  rest:
+    container_name: "iceberg-rest"
+    image: apache/iceberg-rest-fixture:1.10.1
+    ports:
+      - "8181:8181"
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH__STYLE__ACCESS=true
+    networks:
+      automq_net:
+    depends_on:
+      - minio
+      - mc
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8181/v1/config || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  server1:
+    container_name: "automq-single-server"
+    image: automqinc/automq:1.7.4
+    stop_grace_period: 1m
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_S3_ACCESS_KEY=minioadmin
+      - KAFKA_S3_SECRET_KEY=minioadmin
+      - KAFKA_HEAP_OPTS=-Xms1g -Xmx4g -XX:MetaspaceSize=96m -XX:MaxDirectMemorySize=1G
+      - CLUSTER_ID=3D4fXN-yS1-vsQ8aJ_q4Mg
+    command:
+      - bash
+      - -c
+      - |
+        /opt/automq/kafka/bin/kafka-server-start.sh \
+        /opt/automq/kafka/config/kraft/server.properties \
+        --override cluster.id=$$CLUSTER_ID \
+        --override node.id=0 \
+        --override controller.quorum.voters=0@server1:9093 \
+        --override controller.quorum.bootstrap.servers=server1:9093 \
+        --override advertised.listeners=PLAINTEXT://localhost:9092 \
+        --override s3.data.buckets='0@s3://automq-data?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
+        --override s3.ops.buckets='1@s3://automq-ops?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
+        --override s3.wal.path='0@s3://automq-data?region=us-east-1&endpoint=http://minio:9000&pathStyle=true' \
+        --override automq.table.topic.catalog.type=rest \
+        --override automq.table.topic.catalog.uri=http://rest:8181 \
+        --override automq.table.topic.catalog.warehouse=s3://warehouse/wh/ \
+        --override automq.table.topic.namespace=default
+    networks:
+      automq_net:
+    depends_on:
+      - minio
+      - mc
+      - rest
+
+networks:
+  automq_net:
+    name: automq_net
+    driver: bridge

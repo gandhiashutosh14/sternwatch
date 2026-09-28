@@ -94,12 +94,14 @@ class KafkaBus:
     """The same interface on a Kafka-compatible broker (AutoMQ in CI) through kafka-python."""
 
     def __init__(self, bootstrap: str, partitions: int = 3, client_id: str = "tracewake",
-                 request_timeout_ms: int = 30000, ready_timeout_s: float = 60.0):
+                 request_timeout_ms: int = 30000, ready_timeout_s: float = 60.0,
+                 topic_configs: Optional[Dict[str, str]] = None):
         self.bootstrap = bootstrap
         self.default_partitions = partitions
         self.client_id = client_id
         self.request_timeout_ms = request_timeout_ms
         self.ready_timeout_s = ready_timeout_s
+        self.topic_configs = dict(topic_configs or {})   # applied to topics this bus creates (e.g. Table Topic)
         self._producer = None
         self._pending: List[object] = []
         self._known: Dict[str, int] = {}
@@ -123,7 +125,8 @@ class KafkaBus:
         wanted = partitions or self.default_partitions
         admin = self._admin()
         try:
-            admin.create_topics([NewTopic(name=topic, num_partitions=wanted, replication_factor=1)])
+            admin.create_topics([NewTopic(name=topic, num_partitions=wanted, replication_factor=1,
+                                          topic_configs=self.topic_configs or None)])
         except TopicAlreadyExistsError:
             wanted = 0  # existing topic: accept however many partitions it has
         finally:
