@@ -11,7 +11,7 @@ permissions:
 
 env:
   # The governed-agent-orchestrator revision the live recorder and the constraint cross-check run against.
-  ORCHESTRATOR_REF: f4bb10d
+  ORCHESTRATOR_REF: 33a3567
   CUDA_VISIBLE_DEVICES: ""
 
 jobs:
@@ -31,11 +31,16 @@ jobs:
         run: |
           git clone -q https://github.com/gandhiashutosh14/governed-agent-orchestrator ../governed-agent-orchestrator
           git -C ../governed-agent-orchestrator checkout -q "$ORCHESTRATOR_REF"
-      - run: python -m pip install -e ".[dev]" -e ../governed-agent-orchestrator
+      - run: python -m pip install -e ".[dev]"
+      # The orchestrator (and so the live recorder) needs Python 3.11+; on 3.10 its pure-Python guard is
+      # still imported from the checkout for the constraint cross-check, and the live tests skip.
+      - if: matrix.python != '3.10'
+        run: python -m pip install -e ../governed-agent-orchestrator
       - run: python -m pytest -q
       - name: Demo on the in-memory log
         run: tracewake demo --out artifacts/demo-memory.md --json artifacts/demo-memory.json
       - name: Live recording on the in-memory log
+        if: matrix.python != '3.10'
         run: tracewake live --orchestrator ../governed-agent-orchestrator --out artifacts/live-memory.md --json artifacts/live-memory.json
       - uses: actions/upload-artifact@v4
         with:

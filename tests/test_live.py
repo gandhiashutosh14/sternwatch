@@ -1,6 +1,10 @@
 """The live recorder against the real orchestrator (skipped when it is not importable)."""
+import sys
+
 import pytest
 
+if sys.version_info < (3, 11):
+    pytest.skip("LangGraph's interrupt() in async nodes needs Python 3.11+", allow_module_level=True)
 pytest.importorskip("langgraph")
 pytest.importorskip("orchestrator.graph")
 
