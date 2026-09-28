@@ -38,6 +38,23 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
   scenarios plus one extra objective and writes the journals unchanged, with a provenance file
   naming the orchestrator revision and catalog hash.
 
+## LakeMirror (v0.2, 2026-09-28)
+
+- **Value as string, no schema registry.** AutoMQ's Table Topic can convert the record value as a
+  string; the envelope is JSON text, so the table gets one JSON column plus the key and the Kafka
+  metadata, and the schema registry that AutoMQ's own playground runs is not needed. Typed columns
+  through a registered Avro schema are the next step, not this one.
+- **The lake holds the raw log; the ledger holds the run.** The proof deliberately re-publishes one
+  run, so the table has 43 rows for 40 events. LakeMirror checks both facts: the row count equals the
+  messages published, and the distinct (run id, seq) pairs and their per-run digests equal the ledger.
+- **PyIceberg and DuckDB instead of Spark.** The CI job stays at one broker, one object store and one
+  small catalog process; the table is read into Arrow and queried in-process.
+- **Iceberg REST catalog fixture.** The catalog is the Iceberg project's reference REST server with
+  S3 file IO pointed at the object store, path-style addressing, and the virtual-host alias AutoMQ's
+  compose also defines, so both addressing styles work.
+- **Topic names without dots.** The Iceberg table is named after the topic verbatim; underscores
+  avoid any question about dots in identifiers.
+
 ## What the tests caught
 
 - The replay loop reused the name of its policy argument for the recomputed outcome, so the second
@@ -61,14 +78,19 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
   serves offsets before anything is published, and `flush()` waits on every send's future and
   raises on the first refusal, with a test that a refused send cannot pass quietly. The proof's
   first check ("every published event reached the ledger") is what caught it.
+- **Nine days later both broker jobs failed before starting: the quay.io MinIO images now require
+  authentication.** Both compose files switched to the MinIO-compatible images AutoMQ's own compose
+  file on `main` uses (`pgsty/silo`, `pgsty/mc`), pinned. Three image changes in ten days is the
+  lesson: pin, and expect to re-pin.
 
 ## Verification
 
 | Check | Result |
 |---|---|
-| `pytest -q` | 68 passed |
+| `pytest -q` | 75 passed |
 | `tracewake demo` (in-memory log) | 8 of 8 checks; 4 runs, 40 events, 7 decisions, 2 flipped, 0 mismatches ([`reports/demo-memory.md`](../reports/demo-memory.md)) |
 | `tracewake proof --bootstrap localhost:9092` against AutoMQ 1.7.4 + MinIO (CI) | 8 of 8 checks, same counts; publish 0.99 s, ledger rebuild 0.14 s ([`reports/replayproof-automq-2026-09-19.md`](../reports/replayproof-automq-2026-09-19.md)) |
+| `tracewake lake ...` against AutoMQ 1.7.4 Table Topic + Iceberg REST catalog (CI) | 8 of 8 proof checks and 6 of 6 lake checks; 43 rows, 40 distinct events, 4 of 4 run digests equal, table fully visible 42.5 s after the last publish ([`reports/lakemirror-automq-2026-09-28.md`](../reports/lakemirror-automq-2026-09-28.md)) |
 
 ## What is and is not claimed
 

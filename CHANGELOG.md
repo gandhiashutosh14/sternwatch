@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0a1 (2026-09-28)
+
+LakeMirror: `tracewake lake` runs the proof on a topic created with AutoMQ's Table Topic enabled
+(value converted as a string, no schema registry), reads the Iceberg table the broker wrote through
+the REST catalog with PyIceberg, checks it against the ledger with six checks, and answers four
+reviewer questions with DuckDB. New `docker/compose.lake.yaml` (AutoMQ + MinIO-compatible storage +
+Iceberg REST catalog) and a `lakemirror` CI job. `KafkaBus` can create topics with configs. The
+MinIO images in both compose files are the ones AutoMQ's own compose uses, after the quay.io copies
+started requiring authentication. 75 tests.
+
 ## 0.1.0a1 (2026-09-19)
 
 First release: TraceEnvelope, Recorder, WakeLedger, PolicyEcho and ReplayProof; an in-memory log
