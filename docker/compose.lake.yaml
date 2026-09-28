@@ -6,8 +6,9 @@
 # https://github.com/AutoMQ/automq/blob/1.7.4/docker/table_topic/docker-compose.yml). Changes: the
 # Spark/Jupyter and Schema Registry services are dropped (the value is written as a string, so no
 # registry is needed, and PyIceberg + DuckDB replace Spark); the broker and the catalog are
-# published on the host; MinIO images come from quay.io (the Docker Hub tags were removed on
-# 2026-09-19); the REST catalog image is pinned. Heap settings and bucket names are theirs.
+# published on the host; MinIO-compatible images are the ones AutoMQ's own compose file on main uses
+# (pgsty/silo and pgsty/mc), because the minio/minio and minio/mc images left Docker Hub on 2026-09-19 and their
+# quay.io copies required authentication by 2026-09-28; the REST catalog image is pinned. Heap settings and bucket names are theirs.
 #
 #   docker compose -f docker/compose.lake.yaml up -d
 #   python scripts/wait_for_broker.py localhost:9092
@@ -17,7 +18,7 @@
 services:
   minio:
     container_name: "minio"
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z.hotfix.7aa24e772
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
@@ -38,7 +39,7 @@ services:
 
   mc:
     container_name: "mc"
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       minio:
         condition: service_healthy
