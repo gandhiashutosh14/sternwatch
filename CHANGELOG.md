@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0a1 (2026-09-29)
+
+`tracewake live` runs the governed-agent-orchestrator with a Recorder subscribed to each run, rebuilds
+the ledger from the log, compares every run with the agent's own journal event for event, and replays
+the live runs under the changed policy; CI runs it in memory and against AutoMQ. A codec layer adds
+Avro in the Confluent wire format; `tracewake lake --typed` writes typed Iceberg columns through a
+schema registry that stores schemas in AutoMQ. PolicyEcho replays refusals from the arguments the
+orchestrator now records. 83 tests. The live recorder needs Python 3.11+.
+
 ## 0.2.0a1 (2026-09-28)
 
 LakeMirror: `tracewake lake` runs the proof on a topic created with AutoMQ's Table Topic enabled

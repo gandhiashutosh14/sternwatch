@@ -1,0 +1,192 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "every event the agent emitted was published as it happened",
+      "passed": true,
+      "detail": "emitted 63, published 63",
+      "numbers": {}
+    },
+    {
+      "name": "the ledger rebuilt from the log holds every live event",
+      "passed": true,
+      "detail": "inserted 63, invalid 0",
+      "numbers": {}
+    },
+    {
+      "name": "each run in the ledger equals the agent's own journal, event for event",
+      "passed": true,
+      "detail": "5 of 5 runs identical",
+      "numbers": {}
+    },
+    {
+      "name": "per-run digests from the log equal digests of the journal",
+      "passed": true,
+      "detail": "5 of 5 match",
+      "numbers": {}
+    },
+    {
+      "name": "every live event carries the policy id in force",
+      "passed": true,
+      "detail": "policy cc9add63cb2c",
+      "numbers": {}
+    },
+    {
+      "name": "replay reproduces every live decision under the old policy",
+      "passed": true,
+      "detail": "10 recomputed, 0 mismatches",
+      "numbers": {}
+    },
+    {
+      "name": "the policy change is visible in the live replay",
+      "passed": true,
+      "detail": "3 flipped, 0 need evidence",
+      "numbers": {}
+    }
+  ],
+  "numbers": {
+    "emitted": 63,
+    "published": 63,
+    "ledger_events": 63,
+    "ingest_s": 0.1333272849999929,
+    "decisions": 10
+  },
+  "echo": {
+    "counts": {
+      "unchanged": 7,
+      "flipped": 3,
+      "needs-evidence": 0
+    },
+    "transitions": {
+      "ALLOWED -> ALLOWED": 7,
+      "ALLOWED -> DENIED": 2,
+      "DENIED -> ALLOWED": 1
+    },
+    "rows": [
+      {
+        "run_id": "live-1-7015bc",
+        "seq": 5,
+        "level": "call",
+        "capability": "revenue_by_year",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-1-7015bc",
+        "seq": 9,
+        "level": "call",
+        "capability": "forecast_next_year",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-1-7015bc",
+        "seq": 13,
+        "level": "call",
+        "capability": "draft_summary",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-1-7015bc",
+        "seq": 22,
+        "level": "call",
+        "capability": "send_report",
+        "transition": "ALLOWED -> DENIED",
+        "classification": "flipped"
+      },
+      {
+        "run_id": "live-2-afade5",
+        "seq": 2,
+        "level": "plan",
+        "capability": "send_report",
+        "transition": "DENIED -> ALLOWED",
+        "classification": "flipped"
+      },
+      {
+        "run_id": "live-3-fad77a",
+        "seq": 5,
+        "level": "call",
+        "capability": "top_genres_by_tracks_sold",
+        "transition": "ALLOWED -> DENIED",
+        "classification": "flipped"
+      },
+      {
+        "run_id": "live-3-fad77a",
+        "seq": 9,
+        "level": "call",
+        "capability": "draft_summary",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-4-f4d5ae",
+        "seq": 5,
+        "level": "call",
+        "capability": "customer_count_by_country",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-4-f4d5ae",
+        "seq": 9,
+        "level": "call",
+        "capability": "draft_summary",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      },
+      {
+        "run_id": "live-5-ba66fb",
+        "seq": 5,
+        "level": "call",
+        "capability": "revenue_by_year",
+        "transition": "ALLOWED -> ALLOWED",
+        "classification": "unchanged"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "live-1-7015bc",
+      "objective": "Forecast next year's revenue and send it to finance@example.com.",
+      "status": "completed",
+      "events": 25,
+      "wall_ms": 120.30175099999951
+    },
+    {
+      "run_id": "live-2-afade5",
+      "objective": "Forecast next year's revenue and send it to partner@example.org.",
+      "status": "failed",
+      "events": 3,
+      "wall_ms": 3.315594000000033
+    },
+    {
+      "run_id": "live-3-fad77a",
+      "objective": "What are the top 5 genres by tracks sold?",
+      "status": "completed",
+      "events": 12,
+      "wall_ms": 14.308609000011074
+    },
+    {
+      "run_id": "live-4-f4d5ae",
+      "objective": "Which 5 countries have the most customers?",
+      "status": "completed",
+      "events": 12,
+      "wall_ms": 5.470227000003547
+    },
+    {
+      "run_id": "live-5-ba66fb",
+      "objective": "Forecast next year's revenue from the yearly totals.",
+      "status": "failed",
+      "events": 11,
+      "wall_ms": 5.111737999996535
+    }
+  ],
+  "environment": {
+    "generated_at": "2026-09-28T20:28:12+00:00",
+    "revision": "a0e301b",
+    "orchestrator_revision": "33a3567",
+    "bus": "KafkaBus on localhost:9092 (kafka-python)",
+    "topic": "tracewake.live.1790627289"
+  }
+}

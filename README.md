@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Log](https://img.shields.io/badge/log-Kafka%20protocol%20%C2%B7%20AutoMQ%201.7-orange)
 ![Lake](https://img.shields.io/badge/lake-Apache%20Iceberg%20via%20Table%20Topic-blue)
-![Status](https://img.shields.io/badge/status-v0.2%20prototype-yellow)
+![Status](https://img.shields.io/badge/status-v0.3%20prototype-yellow)
 
 > **In plain English:** an AI agent that can act (query data, send a report, issue a refund) makes a
 > stream of decisions: which tool to call, with what values, whether a rule allowed it, whether a
@@ -57,10 +57,10 @@ made by an autonomous agent.
 | What problem does this address? | Agent decisions are kept as disposable logs. They should be durable, ordered, reconstructible evidence that can be re-examined when policies change. |
 | Who has this problem? | Anyone deploying agents that act on real systems: platform teams, risk and compliance functions, and the engineers who answer "why did the agent do that?" |
 | What does this repository do? | Publishes a governed agent's decision trace to a Kafka-compatible log as versioned envelopes, rebuilds the ledger from the log alone, and replays recorded tool decisions under a changed policy. A proof pack verifies all of it. |
-| What has been shown so far? | On four recorded runs (40 events): the ledger rebuilt from the log equals the source, survives being destroyed and rebuilt, and ignores duplicate delivery; 7 decisions were replayed under a changed policy with 0 mismatches against the record, 2 flipped and 0 needing evidence; 8 of 8 checks pass on the in-memory log ([report](reports/demo-memory.md)) and, identically, against a real AutoMQ 1.7.4 + MinIO cluster in CI ([report](reports/replayproof-automq-2026-09-19.md)). The Iceberg table AutoMQ wrote from the same topic held all 43 published messages, its 40 distinct events matched the ledger digest for digest, and four SQL questions were answered from it ([report](reports/lakemirror-automq-2026-09-28.md)). 75 unit tests. |
-| How mature is it? | v0.1 prototype. The runs come from the author's [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on a public sample database, with a deterministic planner and no language model. |
+| What has been shown so far? | On four recorded runs (40 events): the ledger rebuilt from the log equals the source, survives being destroyed and rebuilt, and ignores duplicate delivery; 7 decisions were replayed under a changed policy with 0 mismatches against the record, 2 flipped and 0 needing evidence; 8 of 8 checks pass on the in-memory log ([report](reports/demo-memory.md)) and, identically, against a real AutoMQ 1.7.4 + MinIO cluster in CI ([report](reports/replayproof-automq-2026-09-19.md)). The Iceberg table AutoMQ wrote from the same topic held all 43 published messages, its 40 distinct events matched the ledger digest for digest, and four SQL questions were answered from it ([report](reports/lakemirror-automq-2026-09-28.md)); with the envelope registered as an Avro schema, the broker wrote typed columns and every check held again ([report](reports/lakemirror-typed-automq-2026-09-29.md)). A live run of the orchestrator streamed 63 events into AutoMQ as it made its decisions, and all 5 runs rebuilt from the log equal the agent's own journal, event for event ([report](reports/live-automq-2026-09-29.md)). 83 unit tests. |
+| How mature is it? | v0.3 prototype. The runs come from the author's [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on a public sample database, with a deterministic planner and no language model. |
 | What it is not | Not a Kafka fork or an AutoMQ plug-in; not a benchmark of AutoMQ; not a full policy engine. It replays argument constraints, effect classes and approval requirements, which is what the orchestrator's guard decides. |
-| What it would take to use it for real | A live recorder in your agent runtime (one line with the orchestrator), a registered schema for the envelope instead of JSON text, retention and access rules on the topic and the table, and a policy format for your own tool catalog. |
+| What it would take to use it for real | Subscribing the Recorder in your own agent runtime (one line, as `tracewake live` does with the orchestrator), retention and access rules on the topic and the table, and a policy format for your own tool catalog. |
 
 ## How it works, end to end
 
@@ -127,9 +127,10 @@ git clone https://github.com/gandhiashutosh14/tracewake.git
 cd tracewake
 python -m venv .venv && . .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-pytest -q                                            # 68 passed
+pytest -q                                            # 83 passed
 tracewake demo --out reports/demo-memory.md          # in-memory log: 8 of 8 checks
 tracewake echo --from policies/v1.json --to policies/v2.json
+tracewake live --orchestrator ../governed-agent-orchestrator   # a live agent streaming into the log (Python 3.11+)
 ```
 
 Against a real AutoMQ cluster (Docker required; this is what CI does):
@@ -138,6 +139,7 @@ Against a real AutoMQ cluster (Docker required; this is what CI does):
 docker compose -f docker/compose.yaml up -d          # AutoMQ 1.7.4 + MinIO
 python scripts/wait_for_broker.py localhost:9092
 tracewake proof --bootstrap localhost:9092 --out reports/replayproof-automq.md
+tracewake live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator
 docker compose -f docker/compose.yaml down -v
 ```
 
@@ -148,6 +150,8 @@ pip install -e ".[lake]"                              # adds PyIceberg and DuckD
 docker compose -f docker/compose.lake.yaml up -d     # AutoMQ 1.7.4 + MinIO + Iceberg REST catalog
 python scripts/wait_for_broker.py localhost:9092
 tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --out reports/lakemirror-automq.md
+# typed columns: Avro through the schema registry in the same compose file
+tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --typed --registry http://localhost:8081
 docker compose -f docker/compose.lake.yaml down -v
 ```
 
@@ -186,11 +190,11 @@ are what that machine measured on 40 events; they are not a benchmark of AutoMQ.
 | Subsystem | What it is | Where |
 |---|---|---|
 | **TraceEnvelope** | The versioned event: `run_id`, `seq`, `ts`, `type`, `data`, plus `policy_id`, `producer`, `envelope_version`. Validated on the way in and on the way out; canonical JSON so digests are stable. | [`tracewake/envelope.py`](tracewake/envelope.py) |
-| **Recorder** | Plugs into the orchestrator's `DecisionTrace.subscribe()` for live use, or publishes recorded JSONL files. | [`tracewake/recorder.py`](tracewake/recorder.py) |
+| **Recorder** | Plugs into the orchestrator's `DecisionTrace.subscribe()` for live use (`tracewake live` runs the real orchestrator that way), or publishes recorded JSONL files. Encodes through a codec: canonical JSON by default, or Avro in the Confluent wire format. | [`tracewake/recorder.py`](tracewake/recorder.py), [`tracewake/live.py`](tracewake/live.py), [`tracewake/codec.py`](tracewake/codec.py) |
 | **WakeLedger** | SQLite ledger keyed by `(run_id, seq)`; idempotent ingest; per-run digests, gap detection, and the questions a reviewer asks (irreversible calls, denials, approvals). | [`tracewake/ledger.py`](tracewake/ledger.py) |
 | **PolicyEcho** | Recovers each decision's arguments from the log, recomputes under old and new policy, classifies `unchanged`, `flipped`, `needs-evidence`. Constraint semantics are a line-for-line match of the orchestrator's guard, cross-checked by a test. | [`tracewake/echo.py`](tracewake/echo.py), [`tracewake/policy.py`](tracewake/policy.py) |
 | **ReplayProof** | The eight checks and the report. | [`tracewake/proof.py`](tracewake/proof.py) |
-| **LakeMirror** | The same topic as an Apache Iceberg table, written by AutoMQ's Table Topic on the broker side. Read with PyIceberg through the REST catalog, checked against the ledger with six checks, and queried with DuckDB. | [`tracewake/lake.py`](tracewake/lake.py) |
+| **LakeMirror** | The same topic as an Apache Iceberg table, written by AutoMQ's Table Topic on the broker side. Read with PyIceberg through the REST catalog, checked against the ledger, and queried with DuckDB. Two layouts: the envelope as one JSON string column, or typed columns from a registered Avro schema that the broker converts by schema id and flattens. | [`tracewake/lake.py`](tracewake/lake.py) |
 
 ## From the log to SQL
 
@@ -225,6 +229,38 @@ and "which irreversible actions ran, and who approved them" returns one row: run
 step `s4`, `send_report`, approved by `demo`. The other queries, with their results, are in the
 [report](reports/lakemirror-automq-2026-09-28.md).
 
+### Typed columns
+
+With `--typed`, each envelope is written as Avro in the Confluent wire format against a schema
+registered for the topic, and the topic is created with `convert.value.type=by_schema_id` and
+`transform.value.type=flatten`. The broker then writes one Iceberg column per field: `run_id`,
+`seq` (long), `type`, `step`, `capability`, `effect`, `reason`, `policy_id` and the full payload as
+`data_json`, next to the Kafka key and metadata. The reviewer's question needs no JSON functions:
+
+```sql
+SELECT capability,
+       CASE type WHEN 'tool_call_allowed' THEN 'ALLOWED' ELSE 'DENIED' END AS decision,
+       COUNT(DISTINCT id) AS decisions
+FROM iceberg WHERE type IN ('tool_call_allowed', 'tool_call_denied')
+GROUP BY 1, 2 ORDER BY 1, 2
+```
+
+In the [committed typed run](reports/lakemirror-typed-automq-2026-09-29.md) it returns the same six rows as
+the JSON-column query above, and every LakeMirror check held, including rebuilding each envelope from
+the typed row and matching the ledger's digests.
+
+## A live agent, streaming
+
+The fixtures prove the replay; `tracewake live` proves the plumbing. It runs the
+[governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on five
+objectives with a Recorder subscribed to each run's `DecisionTrace` before the run starts, so every
+decision reaches the log from inside the agent as it happens. In the
+[committed run against AutoMQ](reports/live-automq-2026-09-29.md): 63 events emitted, 63 published,
+63 in the ledger rebuilt from the log; all 5 runs equal the agent's own journal event for event; the
+replay under policy v2 reproduces all 10 recorded decisions and finds 3 flips (the finance report,
+the partner report, and a top-5 genre query that exceeds the new cap of 2). The orchestrator now
+records the arguments of refused calls too, so refusals replay from evidence rather than a guess.
+
 Two design choices worth knowing. Decisions are replayed only when the log holds the arguments
 the guard saw; a `needs-evidence` verdict is a finding about the log, not a guess. And the replay
 first reproduces the past (0 mismatches required) before it predicts the change, which is what
@@ -236,27 +272,29 @@ makes the flip table credible.
   model in the loop and the four runs are the ones in `fixtures/`.
 - "Policy" here means the orchestrator's catalog constraints, effect classes and approval
   requirements. Call budgets, planner behaviour and human judgement are not replayed.
-- The orchestrator does not record a refused call's resolved arguments, only the violation text.
-  Such calls replay as `needs-evidence` when the new policy constrains a referenced argument. Adding
-  the arguments to that event upstream is the obvious next fix.
+- The four recorded fixtures predate the orchestrator recording a refused call's arguments; the
+  live runs include them. A refusal without recorded arguments replays as `needs-evidence` when the
+  new policy constrains a referenced argument.
+- The live recorder needs Python 3.11+, because the orchestrator's approval pause (LangGraph's
+  `interrupt()` in an async node) does; the rest of TRACEWAKE runs on 3.10+.
 - Nothing here measures AutoMQ's cost or latency. AutoMQ's own figures are AutoMQ's; see their
   documentation.
 - The 42.5 s to visibility is one measurement on one CI run with a 2 s commit interval; AutoMQ's
   table coordinator starts some seconds after a topic is created, so a long-lived topic would show
   rows sooner. It is not a latency benchmark.
-- The table uses Table Topic's string conversion, not a registered Avro or Protobuf schema, so the
-  envelope's fields are inside a JSON column rather than typed columns.
+- In the typed layout only the fields a reviewer filters on are columns; the rest of the payload stays
+  in `data_json`, because event payloads differ by event type.
 - TRACEWAKE is an independent project and is not affiliated with or endorsed by AutoMQ.
 
 ## Project layout
 
 ```
-tracewake/            envelope, bus, recorder, policy, ledger, echo, proof, lake, cli
+tracewake/            envelope, bus, codec, recorder, policy, ledger, echo, proof, lake, live, cli
 policies/             v1.json (the orchestrator's catalog) and v2.json (the changed policy)
 fixtures/orchestrator four recorded runs and PROVENANCE.json
-tests/                68 tests; the in-memory log is enough for all of them
+tests/                83 tests; the in-memory log is enough for all of them
 docker/compose.yaml   AutoMQ 1.7.4 + MinIO, adapted from AutoMQ's own compose file
-docker/compose.lake.yaml   the same plus an Iceberg REST catalog, with Table Topic enabled on the broker
+docker/compose.lake.yaml   the same plus an Iceberg REST catalog and a schema registry, with Table Topic enabled
 scripts/              make_fixtures.py, wait_for_broker.py
 reports/              committed proof reports with the command and revision that produced them
 docs/DEVELOPMENT_NOTES.md   how this was built, including what the tests caught
@@ -329,12 +367,12 @@ These are illustrative examples of where the pattern fits. None of them is a dep
 
 ## Roadmap
 
-- **Typed lake columns:** register the envelope as an Avro schema so Table Topic writes typed
-  columns instead of a JSON string, and add partitioning by day.
-- **Upstream:** record a refused call's resolved arguments in the orchestrator's `tool_call_denied`
-  event, so those decisions replay without a `needs-evidence` verdict.
-- **Live recorder demo:** run the orchestrator with the Recorder subscribed, against the compose
-  stack, in CI.
+Done in v0.3: typed lake columns through a registered Avro schema, a live recorder against AutoMQ
+in CI, and refusal arguments recorded by the orchestrator. Next:
+
+- **Partitioned lake:** partition the typed table by day and by run, and compact it.
+- **Other producers:** record a second agent runtime's decisions under its own producer name, to show
+  the envelope is not tied to one orchestrator.
 
 See [docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md) for how this was built and what the
 tests caught, and [NOTICE.md](NOTICE.md) for third-party attribution.

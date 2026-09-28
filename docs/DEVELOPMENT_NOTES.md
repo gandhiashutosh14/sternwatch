@@ -55,6 +55,25 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
 - **Topic names without dots.** The Iceberg table is named after the topic verbatim; underscores
   avoid any question about dots in identifiers.
 
+## Live recording and typed lake (v0.3, 2026-09-29)
+
+- **One line in the runtime.** The live recorder subscribes a Recorder to each run's `DecisionTrace`
+  before the run starts; nothing else in the orchestrator changes. The check that matters is exact
+  equality between each run in the ledger rebuilt from the log and the agent's own journal.
+- **Refusals carry their arguments.** The orchestrator's `tool_call_denied` event now records the
+  arguments the guard saw, and PolicyEcho replays a refusal from them. The recorded fixtures keep
+  their original form; the live runs show the new one.
+- **Avro without a second client library.** The codec writes the Confluent wire format itself (a zero
+  byte, the schema id, Avro binary via fastavro) and registers the schema over plain HTTP, so the
+  producer stays on kafka-python, the client AutoMQ lists for Python.
+- **Two listeners.** The schema registry runs in the same network as the broker and stores its
+  schemas in AutoMQ, so the broker advertises an internal listener for it next to `localhost:9092`
+  for host clients.
+- **Python 3.11 for the live path.** The first CI run failed on Python 3.10: LangGraph's `interrupt()`
+  in an async node needs context propagation that Python 3.11 added. The orchestrator's CI had only
+  ever run 3.11, so its "3.10+" claim was untested; it now requires and tests 3.11 and 3.12, and
+  TRACEWAKE skips the live tests on 3.10.
+
 ## What the tests caught
 
 - The replay loop reused the name of its policy argument for the recomputed outcome, so the second
@@ -87,10 +106,12 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
 
 | Check | Result |
 |---|---|
-| `pytest -q` | 75 passed |
+| `pytest -q` | 83 passed |
 | `tracewake demo` (in-memory log) | 8 of 8 checks; 4 runs, 40 events, 7 decisions, 2 flipped, 0 mismatches ([`reports/demo-memory.md`](../reports/demo-memory.md)) |
 | `tracewake proof --bootstrap localhost:9092` against AutoMQ 1.7.4 + MinIO (CI) | 8 of 8 checks, same counts; publish 0.99 s, ledger rebuild 0.14 s ([`reports/replayproof-automq-2026-09-19.md`](../reports/replayproof-automq-2026-09-19.md)) |
 | `tracewake lake ...` against AutoMQ 1.7.4 Table Topic + Iceberg REST catalog (CI) | 8 of 8 proof checks and 6 of 6 lake checks; 43 rows, 40 distinct events, 4 of 4 run digests equal, table fully visible 42.5 s after the last publish ([`reports/lakemirror-automq-2026-09-28.md`](../reports/lakemirror-automq-2026-09-28.md)) |
+| `tracewake lake --typed ...` with the schema registry (CI) | 8 of 8 proof checks and 7 of 7 lake checks; typed Iceberg columns; same 43 rows and 40 distinct events ([`reports/lakemirror-typed-automq-2026-09-29.md`](../reports/lakemirror-typed-automq-2026-09-29.md)) |
+| `tracewake live --bootstrap localhost:9092 ...` against AutoMQ (CI) | 7 of 7 checks; 63 events emitted, published and rebuilt; 5 of 5 runs identical to the agent's journal; 10 decisions replayed, 0 mismatches, 3 flipped ([`reports/live-automq-2026-09-29.md`](../reports/live-automq-2026-09-29.md)) |
 
 ## What is and is not claimed
 
