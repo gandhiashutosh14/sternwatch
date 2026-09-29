@@ -11,7 +11,7 @@ permissions:
 
 env:
   # The governed-agent-orchestrator revision the live recorder and the constraint cross-check run against.
-  ORCHESTRATOR_REF: 33a3567
+  ORCHESTRATOR_REF: 211971f
   CUDA_VISIBLE_DEVICES: ""
 
 jobs:
