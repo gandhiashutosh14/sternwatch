@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from .envelope import TraceEnvelope, digest_envelopes
+from .envelope import TraceEnvelope, digest_envelopes, validate
 from .ledger import WakeLedger
 from .proof import Check
 
@@ -115,6 +115,9 @@ def _parse_typed(arrow_table) -> LakeRows:
         key = _as_text(rec.get(KEY_COL))
         try:
             env: Optional[TraceEnvelope] = from_avro_record(rec)
+            problems = validate(env.to_dict())   # the string layout validates in from_json; so does the ledger
+            if problems:
+                raise ValueError("; ".join(problems))
             text = env.to_json().decode("utf-8")
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             env, text, invalid = None, "", invalid + 1

@@ -106,7 +106,7 @@ def test_sql_queries_answer_reviewer_questions(fixtures_dir):
 
 
 def test_wait_for_table_polls_until_the_rows_are_visible():
-    from pyiceberg.exceptions import NoSuchTableError
+    iceberg_errors = pytest.importorskip("pyiceberg.exceptions")
 
     class FakeScan:
         def __init__(self, n):
@@ -129,7 +129,7 @@ def test_wait_for_table_polls_until_the_rows_are_visible():
         def load_table(self, identifier):
             self.calls += 1
             if self.calls == 1:
-                raise NoSuchTableError("not yet")
+                raise iceberg_errors.NoSuchTableError("not yet")
             return FakeTable(self.calls)   # 2 rows, then 3, ...
 
     catalog = FakeCatalog()

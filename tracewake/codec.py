@@ -11,9 +11,11 @@ rebuilt exactly and its digest compared with the ledger's.
 """
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import struct
+import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
@@ -78,8 +80,24 @@ def from_avro_record(rec: Dict[str, Any]) -> TraceEnvelope:
                          producer=rec.get("producer") or "", envelope_version=rec.get("envelope_version") or ENVELOPE_VERSION)
 
 
+def _error_detail(e: urllib.error.HTTPError) -> str:
+    """The body of an HTTP error answer, trimmed, or the status reason when it has none."""
+    try:
+        text = e.read().decode("utf-8", errors="replace").strip()
+    except Exception:  # noqa: BLE001
+        text = ""
+    return text[:300] or str(e.reason)
+
+
 class SchemaRegistry:
-    """The two calls TRACEWAKE needs from a Confluent-compatible schema registry, over plain HTTP."""
+    """The two calls TRACEWAKE needs from a Confluent-compatible schema registry, over plain HTTP.
+
+    A schema id the registry does not know (HTTP 404) is a fault in one message: ``schema`` raises
+    ValueError, which the ledger counts as that message being invalid before it goes on to the next.
+    A registry that cannot answer (unreachable, timed out, HTTP 5xx or any other error status, a reply
+    that is not JSON) is a fault in the registry: every call raises RuntimeError naming the registry and
+    the request, which stops the caller, because an outage must not mark every message invalid.
+    """
 
     CONTENT_TYPE = "application/vnd.schemaregistry.v1+json"
 
@@ -87,19 +105,36 @@ class SchemaRegistry:
         self.url = url.rstrip("/")
         self.timeout_s = timeout_s
 
-    def _call(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _call(self, method: str, path: str, body: Optional[Dict[str, Any]] = None, *,
+              missing_ok: bool = False) -> Optional[Dict[str, Any]]:
+        """The registry's JSON answer; None for HTTP 404 when ``missing_ok``. Any other failure raises RuntimeError."""
         data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(self.url + path, data=data, method=method,
                                      headers={"Content-Type": self.CONTENT_TYPE, "Accept": self.CONTENT_TYPE})
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        where = f"schema registry {self.url} ({method} {path})"
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                raw = resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404 and missing_ok:
+                return None
+            raise RuntimeError(f"{where} answered HTTP {e.code}: {_error_detail(e)}") from e
+        except (OSError, http.client.HTTPException) as e:  # URLError, refused connections and timeouts are OSErrors
+            raise RuntimeError(f"{where} could not be reached: {type(e).__name__}: {e}") from e
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except ValueError as e:  # JSONDecodeError and UnicodeDecodeError are ValueErrors; not the message's fault
+            raise RuntimeError(f"{where} answered with something that is not JSON: {raw[:200]!r}") from e
 
     def register(self, subject: str, schema: Dict[str, Any]) -> int:
         return int(self._call("POST", f"/subjects/{subject}/versions",
                               {"schemaType": "AVRO", "schema": json.dumps(schema)})["id"])
 
     def schema(self, schema_id: int) -> Dict[str, Any]:
-        return json.loads(self._call("GET", f"/schemas/ids/{schema_id}")["schema"])
+        found = self._call("GET", f"/schemas/ids/{schema_id}", missing_ok=True)
+        if found is None:
+            raise ValueError(f"schema id {schema_id} is unknown to the registry at {self.url} (HTTP 404)")
+        return json.loads(found["schema"])
 
 
 class AvroCodec:

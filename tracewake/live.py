@@ -6,6 +6,12 @@ starts, the agent plans and acts (the approval gate is approved by the harness),
 reaches the log from inside ``DecisionTrace.emit``. Afterwards the ledger is rebuilt from the log
 alone and compared, event for event, with what the agent's own in-memory journal holds, and the
 live runs are replayed under the changed policy.
+
+A run id is a prefix, the objective's position and a digest of its text. The default prefix carries
+the UTC time of the invocation, so recording again into the same topic starts new runs, and the
+ledger is rebuilt from the messages keyed by this invocation's run ids, so runs already in the topic
+stay out of its checks. A topic that already holds events under the run ids about to be used is
+refused before any agent runs.
 """
 from __future__ import annotations
 
@@ -33,6 +39,34 @@ LIVE_OBJECTIVES: List[Dict[str, Any]] = [
     {"objective": "Which 5 countries have the most customers?", "approve": True, "call_limit": None},
     {"objective": "Forecast next year's revenue from the yearly totals.", "approve": True, "call_limit": 1},
 ]
+
+# A topic of this many messages is read in seconds even from a remote broker. A bigger one is not
+# scanned for earlier runs before recording; a clash there shows up as failed checks instead.
+SCAN_LIMIT = 10_000
+
+
+def default_prefix(now: Optional[datetime] = None) -> str:
+    """``live-`` and the UTC time to the millisecond, e.g. ``live-20260930T101500.123Z``: new on every call."""
+    now = now or datetime.now(timezone.utc)
+    return f"live-{now:%Y%m%dT%H%M%S}.{now.microsecond // 1000:03d}Z"
+
+
+def run_ids_for(objectives: List[Dict[str, Any]], prefix: str) -> List[str]:
+    """One run id per objective: the prefix, the objective's position, and a digest of its text."""
+    return [f"{prefix}-{i}-{hashlib.sha256(spec['objective'].encode('utf-8')).hexdigest()[:6]}"
+            for i, spec in enumerate(objectives, start=1)]
+
+
+def runs_in_topic(bus: Bus, topic: str, run_ids: List[str], limit: int = SCAN_LIMIT) -> Optional[List[str]]:
+    """The run ids that already have events in the topic (every message is keyed by its run id), or
+    None when the topic holds more than ``limit`` messages and is not read."""
+    held = sum(bus.end_offsets(topic).values())
+    if held == 0:
+        return []
+    if held > limit:
+        return None
+    keys = {m.key for m in bus.consume(topic)}
+    return [r for r in run_ids if r.encode("utf-8") in keys]
 
 
 def _import_orchestrator(root: Optional[str]):
@@ -110,14 +144,13 @@ class LiveReport:
         return "\n".join(lines) + "\n"
 
 
-async def _run_all(api: Dict[str, Any], catalog, recorder: Recorder, objectives: List[Dict[str, Any]], prefix: str) -> List[LiveRun]:
+async def _run_all(api: Dict[str, Any], catalog, recorder: Recorder, objectives: List[Dict[str, Any]],
+                   run_ids: List[str]) -> List[LiveRun]:
     runs: List[LiveRun] = []
-    for i, spec in enumerate(objectives, start=1):
+    for spec, run_id in zip(objectives, run_ids):
         orch = api["Orchestrator"](catalog, api["default_adapters"](),
                                    api["PlannerCascade"]([api["build_heuristic_planner"](catalog)]),
                                    call_limit=spec.get("call_limit"))
-        digest = hashlib.sha256(spec["objective"].encode("utf-8")).hexdigest()[:6]
-        run_id = f"{prefix}-{i}-{digest}"
         trace = api["DecisionTrace"](run_id)
         trace.subscribe(recorder)            # the one line a runtime needs to stream its decisions
         orch.traces[run_id] = trace
@@ -130,16 +163,26 @@ async def _run_all(api: Dict[str, Any], catalog, recorder: Recorder, objectives:
 
 
 def run_live(bus: Bus, topic: str, old: Policy, new: Policy, *, orchestrator_root: Optional[str] = None,
-             objectives: Optional[List[Dict[str, Any]]] = None, prefix: str = "live") -> LiveReport:
+             objectives: Optional[List[Dict[str, Any]]] = None, prefix: Optional[str] = None) -> LiveReport:
+    """Run the objectives with a Recorder subscribed, then check the log. Without a ``prefix`` the run
+    ids are new to this call (``default_prefix``); run ids that already have events in the topic are
+    refused with ValueError before the orchestrator is imported, so no agent runs."""
+    objectives = objectives or LIVE_OBJECTIVES
+    run_ids = run_ids_for(objectives, prefix or default_prefix())
+    recorder = Recorder(bus, topic, policy_id=old.policy_id)   # creates the topic if it does not exist
+    taken = runs_in_topic(bus, topic, run_ids)
+    if taken:
+        raise ValueError(f"topic {topic} already holds events for run ids {', '.join(taken)}; recording them again "
+                         "would mix two runs under one id in the ledger. Use another topic or prefix.")
     api = _import_orchestrator(orchestrator_root)
     catalog = api["Catalog"].load(str(api["root"] / "capabilities.json"))
-    recorder = Recorder(bus, topic, policy_id=old.policy_id)
-    runs = asyncio.run(_run_all(api, catalog, recorder, objectives or LIVE_OBJECTIVES, prefix))
+    runs = asyncio.run(_run_all(api, catalog, recorder, objectives, run_ids))
     bus.flush()
 
     ledger = WakeLedger()
+    ours = {r.encode("utf-8") for r in run_ids}
     t0 = time.perf_counter()
-    stats = ledger.ingest(bus, topic)
+    stats = ledger.ingest_messages([m for m in bus.consume(topic) if m.key in ours])   # this invocation's runs only
     ingest_s = time.perf_counter() - t0
     emitted = sum(len(r.events) for r in runs)
     checks: List[Check] = [

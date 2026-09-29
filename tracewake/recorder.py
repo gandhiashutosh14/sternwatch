@@ -20,6 +20,22 @@ from .envelope import PRODUCER_ORCHESTRATOR, TraceEnvelope
 
 
 class Recorder:
+    """Publishes every event it is called with as a TraceEnvelope, and fails closed.
+
+    Subscribed to a DecisionTrace, a Recorder runs inside ``emit``, in the agent's own call stack. An
+    exception raised while recording an event (the envelope fails validation, or the producer will not
+    take the send) is not caught here: it propagates into the agent's run, so no decision goes on
+    unrecorded. That run may already have performed a side effect. ``step_finished`` is emitted after
+    the tool has run, so a report can have been sent although its completion never reached the log;
+    what the run does next is the runtime's decision (the governed-agent-orchestrator handles it like a
+    failure of that tool call), and reconciling such a run is the operator's job.
+
+    ``published`` counts the sends handed to the producer, not the sends the log acknowledged. On a
+    Kafka-compatible log a send the broker refuses surfaces when the bus is flushed (``KafkaBus.flush``
+    raises on the first unacknowledged send), so compare ``published`` with the events emitted only
+    after a flush has returned.
+    """
+
     def __init__(self, bus: Bus, topic: str, *, policy_id: Optional[str] = None,
                  producer: str = PRODUCER_ORCHESTRATOR, partitions: Optional[int] = None, codec=None):
         self.bus = bus

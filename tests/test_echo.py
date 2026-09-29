@@ -76,6 +76,26 @@ def test_needs_evidence_when_the_log_lacks_a_value():
     assert "does not contain the value of facts" in rows[0].notes[0]
 
 
+def test_a_constraint_denial_that_records_its_inputs_replays_from_evidence():
+    # The same refusal as above, from a runtime that records the arguments the guard saw.
+    events = [
+        {"seq": 1, "ts": "t", "run_id": "r", "type": "plan_accepted", "data": {"plan": {"steps": [
+            {"id": "s1", "capability": "draft_summary", "inputs": {"objective": "o", "facts": "$s0.summary"}}]}}},
+        {"seq": 2, "ts": "t", "run_id": "r", "type": "tool_call_denied",
+         "data": {"step": "s1", "capability": "draft_summary", "reason": "constraint",
+                  "violations": ["Input 'facts' is 12 characters long; the maximum is 10."],
+                  "inputs": {"objective": "o", "facts": "twelve chars"}}},
+    ]
+    old = Policy([CapabilityPolicy("draft_summary", constraints={"facts": {"max_length": 10}})])
+    new = Policy([CapabilityPolicy("draft_summary", constraints={"facts": {"max_length": 1000}})])
+    decisions, _ = extract_decisions(events)
+    assert decisions[0].evidence == "resolved" and decisions[0].missing == []
+    assert decisions[0].recorded == DENIED and decisions[0].inputs == {"objective": "o", "facts": "twelve chars"}
+    rows = replay(decisions, old, new)
+    assert rows[0].faithful is True and rows[0].recomputed_old == DENIED
+    assert rows[0].transition == "DENIED -> ALLOWED" and rows[0].classification == FLIPPED
+
+
 def test_fallback_calls_only_see_the_inputs_the_fallback_declares():
     events = [
         {"seq": 1, "ts": "t", "run_id": "r", "type": "step_started",

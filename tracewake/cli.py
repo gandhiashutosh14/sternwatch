@@ -5,7 +5,7 @@
   tracewake lake   --bootstrap host:9092 --catalog http://host:8181 --s3-endpoint http://host:9000 [--typed --registry URL] ...
   tracewake live   [--bootstrap host:9092] [--orchestrator ../governed-agent-orchestrator] [--out ...] [--json ...]
   tracewake publish --bootstrap host:9092 --topic T --policy policies/v1.json TRACE.jsonl [TRACE.jsonl ...]
-  tracewake ledger --bootstrap host:9092 --topic T --db ledger.db
+  tracewake ledger --bootstrap host:9092 --topic T --db ledger.db [--typed --registry URL]
   tracewake echo   --from policies/v1.json --to policies/v2.json (--fixtures DIR | --db ledger.db) [--out ...] [--json ...]
 """
 from __future__ import annotations
@@ -90,6 +90,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     led = sub.add_parser("ledger", parents=[kafka], help="rebuild a ledger from a topic and print run summaries")
     led.add_argument("--db", default="ledger.db")
+    led.add_argument("--typed", action="store_true", help="the topic holds Avro by schema id, as lake --typed writes it")
+    led.add_argument("--registry", default="http://localhost:8081", help="Confluent-compatible schema registry (with --typed)")
 
     ec = sub.add_parser("echo", parents=[pol, rep], help="replay recorded decisions under a changed policy")
     src = ec.add_mutually_exclusive_group()
@@ -177,10 +179,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.cmd == "ledger":
+        topic = args.topic or "agent.decisions"
+        codec = None
+        if args.typed:
+            from .codec import AvroCodec, SchemaRegistry
+            codec = AvroCodec(SchemaRegistry(args.registry), subject=f"{topic}-value")
         bus = KafkaBus(args.bootstrap, partitions=args.partitions)
         ledger = WakeLedger(args.db)
         try:
-            stats = ledger.ingest(bus, args.topic or "agent.decisions")
+            stats = ledger.ingest(bus, topic, codec)
             _out(json.dumps({"ingest": stats.to_dict(), "runs": [ledger.summary(r) for r in ledger.runs()]},
                             indent=2, default=str))
         finally:

@@ -30,6 +30,19 @@ def test_live_runs_stream_into_the_log_and_replay(policies_dir, tmp_path, monkey
     assert "**PASSED**" in text and "event for event" in text
 
 
+def test_two_live_runs_on_one_topic_both_pass(policies_dir, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    old, new = Policy.load(str(policies_dir / "v1.json")), Policy.load(str(policies_dir / "v2.json"))
+    bus = MemoryBus()
+    first = run_live(bus, "live", old, new)
+    second = run_live(bus, "live", old, new)
+    assert first.passed and second.passed, [c for r in (first, second) for c in r.checks if not c.passed]
+    run_ids = {r.run_id for r in first.runs} | {r.run_id for r in second.runs}
+    assert len(run_ids) == 2 * len(LIVE_OBJECTIVES)                          # new run ids for every invocation
+    assert second.numbers["ledger_events"] == second.numbers["emitted"]      # the first run's events stayed out
+    assert len(bus.consume("live")) == first.numbers["published"] + second.numbers["published"]
+
+
 def test_budget_refusals_carry_their_arguments_live(policies_dir):
     old = Policy.load(str(policies_dir / "v1.json"))
     one = [{"objective": "Forecast next year's revenue from the yearly totals.", "approve": True, "call_limit": 1}]
