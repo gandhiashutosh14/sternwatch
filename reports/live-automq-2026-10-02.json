@@ -48,7 +48,7 @@
     "emitted": 63,
     "published": 63,
     "ledger_events": 63,
-    "ingest_s": 0.1333272849999929,
+    "ingest_s": 0.12553685699998596,
     "decisions": 10
   },
   "echo": {
@@ -64,7 +64,7 @@
     },
     "rows": [
       {
-        "run_id": "live-1-7015bc",
+        "run_id": "live-20261002T113530.784Z-1-7015bc",
         "seq": 5,
         "level": "call",
         "capability": "revenue_by_year",
@@ -72,7 +72,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-1-7015bc",
+        "run_id": "live-20261002T113530.784Z-1-7015bc",
         "seq": 9,
         "level": "call",
         "capability": "forecast_next_year",
@@ -80,7 +80,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-1-7015bc",
+        "run_id": "live-20261002T113530.784Z-1-7015bc",
         "seq": 13,
         "level": "call",
         "capability": "draft_summary",
@@ -88,7 +88,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-1-7015bc",
+        "run_id": "live-20261002T113530.784Z-1-7015bc",
         "seq": 22,
         "level": "call",
         "capability": "send_report",
@@ -96,7 +96,7 @@
         "classification": "flipped"
       },
       {
-        "run_id": "live-2-afade5",
+        "run_id": "live-20261002T113530.784Z-2-afade5",
         "seq": 2,
         "level": "plan",
         "capability": "send_report",
@@ -104,7 +104,7 @@
         "classification": "flipped"
       },
       {
-        "run_id": "live-3-fad77a",
+        "run_id": "live-20261002T113530.784Z-3-fad77a",
         "seq": 5,
         "level": "call",
         "capability": "top_genres_by_tracks_sold",
@@ -112,7 +112,7 @@
         "classification": "flipped"
       },
       {
-        "run_id": "live-3-fad77a",
+        "run_id": "live-20261002T113530.784Z-3-fad77a",
         "seq": 9,
         "level": "call",
         "capability": "draft_summary",
@@ -120,7 +120,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-4-f4d5ae",
+        "run_id": "live-20261002T113530.784Z-4-f4d5ae",
         "seq": 5,
         "level": "call",
         "capability": "customer_count_by_country",
@@ -128,7 +128,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-4-f4d5ae",
+        "run_id": "live-20261002T113530.784Z-4-f4d5ae",
         "seq": 9,
         "level": "call",
         "capability": "draft_summary",
@@ -136,7 +136,7 @@
         "classification": "unchanged"
       },
       {
-        "run_id": "live-5-ba66fb",
+        "run_id": "live-20261002T113530.784Z-5-ba66fb",
         "seq": 5,
         "level": "call",
         "capability": "revenue_by_year",
@@ -147,46 +147,46 @@
   },
   "runs": [
     {
-      "run_id": "live-1-7015bc",
+      "run_id": "live-20261002T113530.784Z-1-7015bc",
       "objective": "Forecast next year's revenue and send it to finance@example.com.",
       "status": "completed",
       "events": 25,
-      "wall_ms": 120.30175099999951
+      "wall_ms": 116.20390400000247
     },
     {
-      "run_id": "live-2-afade5",
+      "run_id": "live-20261002T113530.784Z-2-afade5",
       "objective": "Forecast next year's revenue and send it to partner@example.org.",
       "status": "failed",
       "events": 3,
-      "wall_ms": 3.315594000000033
+      "wall_ms": 2.6666570000202228
     },
     {
-      "run_id": "live-3-fad77a",
+      "run_id": "live-20261002T113530.784Z-3-fad77a",
       "objective": "What are the top 5 genres by tracks sold?",
       "status": "completed",
       "events": 12,
-      "wall_ms": 14.308609000011074
+      "wall_ms": 5.127554000011969
     },
     {
-      "run_id": "live-4-f4d5ae",
+      "run_id": "live-20261002T113530.784Z-4-f4d5ae",
       "objective": "Which 5 countries have the most customers?",
       "status": "completed",
       "events": 12,
-      "wall_ms": 5.470227000003547
+      "wall_ms": 10.592040000005909
     },
     {
-      "run_id": "live-5-ba66fb",
+      "run_id": "live-20261002T113530.784Z-5-ba66fb",
       "objective": "Forecast next year's revenue from the yearly totals.",
       "status": "failed",
       "events": 11,
-      "wall_ms": 5.111737999996535
+      "wall_ms": 3.9924589999884574
     }
   ],
   "environment": {
-    "generated_at": "2026-09-28T20:28:12+00:00",
-    "revision": "a0e301b",
-    "orchestrator_revision": "33a3567",
+    "generated_at": "2026-10-02T11:35:32+00:00",
+    "revision": "0b44a24",
+    "orchestrator_revision": "211971f",
     "bus": "KafkaBus on localhost:9092 (kafka-python)",
-    "topic": "tracewake.live.1790627289"
+    "topic": "sternwatch.live.1790940930"
   }
 }

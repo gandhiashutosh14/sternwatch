@@ -1,10 +1,10 @@
-# ReplayProof and typed LakeMirror against AutoMQ 1.7.4 Table Topic
+# ReplayProof
 
-> Produced by the `LakeMirror against AutoMQ Table Topic (typed)` job of GitHub Actions run [36479169645](https://github.com/gandhiashutosh14/tracewake/actions/runs/36479169645): AutoMQ `automqinc/automq:1.7.4` with Table Topic, Confluent Schema Registry 7.9.10 (schemas stored in AutoMQ), an Apache Iceberg REST catalog 1.10.1 and MinIO-compatible storage from `docker/compose.lake.yaml`. Envelopes were written as Avro in the Confluent wire format; the topic converts values by schema id and flattens them. The file is the job's artifact, unedited apart from this note.
+> Produced by the `LakeMirror against AutoMQ Table Topic (typed)` job of GitHub Actions run [37001674067](https://github.com/gandhiashutosh14/sternwatch/actions/runs/37001674067): AutoMQ `automqinc/automq:1.7.4` with Table Topic, Confluent Schema Registry 7.9.10 (schemas stored in AutoMQ), an Apache Iceberg REST catalog 1.10.1 and MinIO-compatible storage from `docker/compose.lake.yaml`. Envelopes were written as Avro in the Confluent wire format; the topic converts values by schema id and flattens them. The file is the job's artifact, unedited apart from this note.
 
-**PASSED**: 8 of 8 checks. Generated 2026-09-28T20:28:46+00:00 at revision `a0e301b` with `tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --topic tracewake_lake_typed_1790627323 --typed --registry http://localhost:8081`.
+**PASSED**: 8 of 8 checks. Generated 2026-10-02T11:35:42+00:00 at revision `0b44a24` with `sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --topic sternwatch_lake_typed_1790940939 --typed --registry http://localhost:8081`.
 
-Log: KafkaBus on localhost:9092 (kafka-python); encoding: Avro, schema id 1 under subject tracewake_lake_typed_1790627323-value (http://localhost:8081). Python 3.12.14 on Linux-6.17.0-1022-azure-x86_64-with-glibc2.39; tracewake 0.3.0a1, kafka-python 3.0.11.
+Log: KafkaBus on localhost:9092 (kafka-python); encoding: Avro, schema id 1 under subject sternwatch_lake_typed_1790940939-value (http://localhost:8081). Python 3.12.14 on Linux-6.17.0-1022-azure-x86_64-with-glibc2.39; sternwatch 0.4.0a1, kafka-python 3.0.11.
 
 ## Numbers
 
@@ -12,8 +12,8 @@ Log: KafkaBus on localhost:9092 (kafka-python); encoding: Avro, schema id 1 unde
 |---|---|
 | Runs published | 4 |
 | Events published | 40 |
-| Publish time | 0.990 s (40 events/s) |
-| Ledger rebuild time (first read from offset 0) | 0.130 s |
+| Publish time | 0.982 s (41 events/s) |
+| Ledger rebuild time (first read from offset 0) | 0.129 s |
 | Duplicate deliveries injected | 3 |
 | Decisions replayed | 7 |
 
@@ -32,7 +32,7 @@ Log: KafkaBus on localhost:9092 (kafka-python); encoding: Avro, schema id 1 unde
 
 # PolicyEcho result
 
-Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Generated 2026-09-28T20:28:46+00:00.
+Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Generated 2026-10-02T11:35:42+00:00.
 
 ## What changed in the policy
 
@@ -56,7 +56,7 @@ Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Gene
 
 # LakeMirror
 
-**PASSED**: 7 of 7 checks. Iceberg table `default.tracewake_lake_typed_1790627323` written by AutoMQ's Table Topic, read with PyIceberg 0.12.0 through the REST catalog at http://localhost:8181, queried with DuckDB 1.5.6.
+**PASSED**: 7 of 7 checks. Iceberg table `default.sternwatch_lake_typed_1790940939` written by AutoMQ's Table Topic, read with PyIceberg 0.12.0 through the REST catalog at http://localhost:8181, queried with DuckDB 1.5.6.
 
 ## Numbers
 
@@ -66,9 +66,9 @@ Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Gene
 | Rows in the Iceberg table | 43 |
 | Distinct events (run id, seq) | 40 |
 | Ledger events | 40 |
-| Time from last publish to full visibility in the table | 42.5 s |
+| Time from last publish to full visibility in the table | 42.4 s |
 | Table Topic commit interval | 2000 ms |
-| Snapshot id | 4969338951659835837 |
+| Snapshot id | 6431206353064602473 |
 | Table layout | typed columns (Avro by schema id, flattened) |
 
 ## Checks

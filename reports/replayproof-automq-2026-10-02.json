@@ -58,24 +58,25 @@
   "numbers": {
     "runs": 4,
     "events": 40,
-    "publish_s": 0.9905883399999311,
-    "publish_events_per_s": 40.3800432377417,
-    "ingest_s": 0.13556213799995476,
+    "publish_s": 0.9925525529999959,
+    "publish_events_per_s": 40.300133105395545,
+    "ingest_s": 0.14882614600000466,
     "duplicates_injected": 3,
     "decisions": 7,
     "ledger_events": 40
   },
   "environment": {
-    "generated_at": "2026-09-19T04:05:29+00:00",
-    "revision": "317c279",
+    "generated_at": "2026-10-02T11:35:30+00:00",
+    "revision": "0b44a24",
     "bus": "KafkaBus on localhost:9092 (kafka-python)",
+    "codec": "canonical JSON",
     "python": "3.12.14",
     "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
-    "tracewake": "0.1.0a1",
+    "sternwatch": "0.4.0a1",
     "kafka_python": "3.0.11",
-    "topic": "tracewake.proof.1789790726"
+    "topic": "sternwatch.proof.1790940927"
   },
-  "command": "tracewake proof --bootstrap localhost:9092 --topic tracewake.proof.1789790726",
+  "command": "sternwatch proof --bootstrap localhost:9092 --topic sternwatch.proof.1790940927",
   "echo": {
     "old_policy": {
       "source": "v1.json",
@@ -107,7 +108,7 @@
     "skipped": {
       "budget_denials": 2
     },
-    "generated_at": "2026-09-19T04:05:29+00:00",
+    "generated_at": "2026-10-02T11:35:30+00:00",
     "rows": [
       {
         "decision": {

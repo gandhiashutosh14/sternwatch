@@ -10,7 +10,9 @@ instead of aborting the ledger rebuild, and a registry outage fails closed with 
 refuses a topic that already holds them; the typed lake layout validates envelopes as the ledger
 does; `sternwatch ledger` takes `--typed/--registry`; the live CI job runs governed-agent-orchestrator
 211971f, where a trace subscriber that fails after a successful tool call fails the run instead of
-sending the step to its fallback. 92 tests.
+sending the step to its fallback. 92 tests. The committed reports were regenerated at the renamed
+revision (in-memory demo locally, the four broker reports by CI run 37001674067); every count, check and
+query result equals the earlier runs, and only timings and identifiers differ.
 
 ## 0.3.0a1 (2026-09-29)
 

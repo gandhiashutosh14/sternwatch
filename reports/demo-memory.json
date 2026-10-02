@@ -58,24 +58,25 @@
   "numbers": {
     "runs": 4,
     "events": 40,
-    "publish_s": 0.0016219000099226832,
-    "publish_events_per_s": 24662.432798127193,
-    "ingest_s": 0.00048320001224055886,
+    "publish_s": 0.001889200008008629,
+    "publish_events_per_s": 21172.98318358746,
+    "ingest_s": 0.0015158000169321895,
     "duplicates_injected": 3,
     "decisions": 7,
     "ledger_events": 40
   },
   "environment": {
-    "generated_at": "2026-09-19T03:48:46+00:00",
-    "revision": "325d4c9",
+    "generated_at": "2026-10-02T11:36:19+00:00",
+    "revision": "0b44a24",
     "bus": "MemoryBus (in-process, 3 partitions per topic)",
+    "codec": "canonical JSON",
     "python": "3.11.9",
     "platform": "Windows-10-10.0.26200-SP0",
-    "tracewake": "0.1.0a1",
+    "sternwatch": "0.4.0a1",
     "kafka_python": "3.0.11",
-    "topic": "tracewake.demo"
+    "topic": "sternwatch.demo"
   },
-  "command": "tracewake demo",
+  "command": "sternwatch demo",
   "echo": {
     "old_policy": {
       "source": "v1.json",
@@ -107,7 +108,7 @@
     "skipped": {
       "budget_denials": 2
     },
-    "generated_at": "2026-09-19T03:48:46+00:00",
+    "generated_at": "2026-10-02T11:36:19+00:00",
     "rows": [
       {
         "decision": {

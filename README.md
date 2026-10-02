@@ -57,7 +57,7 @@ made by an autonomous agent.
 | What problem does this address? | Agent decisions are kept as disposable logs. They should be durable, ordered, reconstructible evidence that can be re-examined when policies change. |
 | Who has this problem? | Anyone deploying agents that act on real systems: platform teams, risk and compliance functions, and the engineers who answer "why did the agent do that?" |
 | What does this repository do? | Publishes a governed agent's decision trace to a Kafka-compatible log as versioned envelopes, rebuilds the ledger from the log alone, and replays recorded tool decisions under a changed policy. A proof pack verifies all of it. |
-| What has been shown so far? | On four recorded runs (40 events): the ledger rebuilt from the log equals the source, survives being destroyed and rebuilt, and ignores duplicate delivery; 7 decisions were replayed under a changed policy with 0 mismatches against the record, 2 flipped and 0 needing evidence; 8 of 8 checks pass on the in-memory log ([report](reports/demo-memory.md)) and, identically, against a real AutoMQ 1.7.4 + MinIO cluster in CI ([report](reports/replayproof-automq-2026-09-19.md)). The Iceberg table AutoMQ wrote from the same topic held all 43 published messages, its 40 distinct events matched the ledger digest for digest, and four SQL questions were answered from it ([report](reports/lakemirror-automq-2026-09-28.md)); with the envelope registered as an Avro schema, the broker wrote typed columns and every check held again ([report](reports/lakemirror-typed-automq-2026-09-29.md)). A live run of the orchestrator streamed 63 events into AutoMQ as it made its decisions, and all 5 runs rebuilt from the log equal the agent's own journal, event for event ([report](reports/live-automq-2026-09-29.md)). 92 unit tests. |
+| What has been shown so far? | On four recorded runs (40 events): the ledger rebuilt from the log equals the source, survives being destroyed and rebuilt, and ignores duplicate delivery; 7 decisions were replayed under a changed policy with 0 mismatches against the record, 2 flipped and 0 needing evidence; 8 of 8 checks pass on the in-memory log ([report](reports/demo-memory.md)) and, identically, against a real AutoMQ 1.7.4 + MinIO cluster in CI ([report](reports/replayproof-automq-2026-10-02.md)). The Iceberg table AutoMQ wrote from the same topic held all 43 published messages, its 40 distinct events matched the ledger digest for digest, and four SQL questions were answered from it ([report](reports/lakemirror-automq-2026-10-02.md)); with the envelope registered as an Avro schema, the broker wrote typed columns and every check held again ([report](reports/lakemirror-typed-automq-2026-10-02.md)). A live run of the orchestrator streamed 63 events into AutoMQ as it made its decisions, and all 5 runs rebuilt from the log equal the agent's own journal, event for event ([report](reports/live-automq-2026-10-02.md)). 92 unit tests. |
 | How mature is it? | v0.4 prototype. The runs come from the author's [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on a public sample database, with a deterministic planner and no language model. |
 | What it is not | Not a Kafka fork or an AutoMQ plug-in; not a benchmark of AutoMQ; not a full policy engine. It replays argument constraints, effect classes and approval requirements, which is what the orchestrator's guard decides. |
 | What it would take to use it for real | Subscribing the Recorder in your own agent runtime (one line, as `sternwatch live` does with the orchestrator), retention and access rules on the topic and the table, and a policy format for your own tool catalog. |
@@ -183,15 +183,15 @@ the orchestrator.
 | **LakeMirror**: the Iceberg table holds every published message | row count vs messages published, duplicates included | 43 rows, 43 messages |
 | The table's distinct events equal the ledger | distinct (run id, seq) pairs; per-run digests | 40 distinct, 4 of 4 run digests equal |
 | Every row is a valid envelope keyed by its run | parse each row; compare key with run id | 43 of 43 |
-| Time to full visibility in the table | polled through the REST catalog after the last publish | 42.5 s, with a 2 s commit interval |
+| Time to full visibility in the table | polled through the REST catalog after the last publish | 42.4 s, with a 2 s commit interval |
 
 Three committed reports show these values: [`reports/demo-memory.md`](reports/demo-memory.md)
-from the in-memory log, and [`reports/replayproof-automq-2026-09-19.md`](reports/replayproof-automq-2026-09-19.md)
+from the in-memory log, and [`reports/replayproof-automq-2026-10-02.md`](reports/replayproof-automq-2026-10-02.md)
 from the `automq` job of [the workflow](.github/workflows/ci.yml), which starts AutoMQ 1.7.4 with
 MinIO on the CI runner on every push and names the run it came from, and
-[`reports/lakemirror-automq-2026-09-28.md`](reports/lakemirror-automq-2026-09-28.md) from the `lakemirror` job,
+[`reports/lakemirror-automq-2026-10-02.md`](reports/lakemirror-automq-2026-10-02.md) from the `lakemirror` job,
 which adds an Iceberg REST catalog and a table-topic-enabled topic. On that runner, publishing the
-40 events with `acks=all` took 0.99 s and rebuilding the ledger from offset 0 took 0.14 s. Timings
+40 events with `acks=all` took 0.99 s and rebuilding the ledger from offset 0 took 0.15 s. Timings
 are what that machine measured on 40 events; they are not a benchmark of AutoMQ.
 
 ## Design
@@ -213,7 +213,7 @@ value converted as a string, which means every row of the table is one TraceEnve
 next to the message key and the Kafka partition, offset and timestamp, and no schema registry is
 needed. LakeMirror then treats the table as a second witness: the lake holds the raw log, duplicate
 deliveries included, while the ledger holds the de-duplicated run, and the two must agree on every
-distinct event. In the committed run they did, 42.5 s after the last publish.
+distinct event. In the committed run they did, 42.4 s after the last publish.
 
 Once the history is a table, the reviewer's questions are SQL. From the committed run:
 
@@ -236,7 +236,7 @@ GROUP BY 1, 2 ORDER BY 1, 2
 
 and "which irreversible actions ran, and who approved them" returns one row: run `805eb5d59e`,
 step `s4`, `send_report`, approved by `demo`. The other queries, with their results, are in the
-[report](reports/lakemirror-automq-2026-09-28.md).
+[report](reports/lakemirror-automq-2026-10-02.md).
 
 ### Typed columns
 
@@ -254,7 +254,7 @@ FROM iceberg WHERE type IN ('tool_call_allowed', 'tool_call_denied')
 GROUP BY 1, 2 ORDER BY 1, 2
 ```
 
-In the [committed typed run](reports/lakemirror-typed-automq-2026-09-29.md) it returns the same six rows as
+In the [committed typed run](reports/lakemirror-typed-automq-2026-10-02.md) it returns the same six rows as
 the JSON-column query above, and every LakeMirror check held, including rebuilding each envelope from
 the typed row and matching the ledger's digests.
 
@@ -264,7 +264,7 @@ The fixtures prove the replay; `sternwatch live` proves the plumbing. It runs th
 [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on five
 objectives with a Recorder subscribed to each run's `DecisionTrace` before the run starts, so every
 decision reaches the log from inside the agent as it happens. In the
-[committed run against AutoMQ](reports/live-automq-2026-09-29.md): 63 events emitted, 63 published,
+[committed run against AutoMQ](reports/live-automq-2026-10-02.md): 63 events emitted, 63 published,
 63 in the ledger rebuilt from the log; all 5 runs equal the agent's own journal event for event; the
 replay under policy v2 reproduces all 10 recorded decisions and finds 3 flips (the finance report,
 the partner report, and a top-5 genre query that exceeds the new cap of 2). The orchestrator now
@@ -301,7 +301,7 @@ makes the flip table credible.
   `interrupt()` in an async node) does; the rest of STERNWATCH runs on 3.10+.
 - Nothing here measures AutoMQ's cost or latency. AutoMQ's own figures are AutoMQ's; see their
   documentation.
-- The 42.5 s to visibility is one measurement on one CI run with a 2 s commit interval; AutoMQ's
+- The 42.4 s to visibility is one measurement on one CI run with a 2 s commit interval; AutoMQ's
   table coordinator starts some seconds after a topic is created, so a long-lived topic would show
   rows sooner. It is not a latency benchmark.
 - In the typed layout only the fields a reviewer filters on are columns; the rest of the payload stays

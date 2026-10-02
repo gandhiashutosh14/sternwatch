@@ -60,25 +60,25 @@
     "numbers": {
       "runs": 4,
       "events": 40,
-      "publish_s": 0.989522098000009,
-      "publish_events_per_s": 40.423554037698345,
-      "ingest_s": 0.13002317800000185,
+      "publish_s": 0.9855730399999914,
+      "publish_events_per_s": 40.58552575667081,
+      "ingest_s": 0.13534168300000715,
       "duplicates_injected": 3,
       "decisions": 7,
       "ledger_events": 40
     },
     "environment": {
-      "generated_at": "2026-09-28T20:28:46+00:00",
-      "revision": "a0e301b",
+      "generated_at": "2026-10-02T11:36:12+00:00",
+      "revision": "0b44a24",
       "bus": "KafkaBus on localhost:9092 (kafka-python)",
-      "codec": "Avro, schema id 1 under subject tracewake_lake_typed_1790627323-value (http://localhost:8081)",
+      "codec": "canonical JSON",
       "python": "3.12.14",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
-      "tracewake": "0.3.0a1",
+      "sternwatch": "0.4.0a1",
       "kafka_python": "3.0.11",
-      "topic": "tracewake_lake_typed_1790627323"
+      "topic": "sternwatch_lake_1790940969"
     },
-    "command": "tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --topic tracewake_lake_typed_1790627323 --typed --registry http://localhost:8081",
+    "command": "sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --topic sternwatch_lake_1790940969",
     "echo": {
       "old_policy": {
         "source": "v1.json",
@@ -110,7 +110,7 @@
       "skipped": {
         "budget_denials": 2
       },
-      "generated_at": "2026-09-28T20:28:46+00:00",
+      "generated_at": "2026-10-02T11:36:12+00:00",
       "rows": [
         {
           "decision": {
@@ -325,7 +325,7 @@
   },
   "lake": {
     "passed": true,
-    "identifier": "default.tracewake_lake_typed_1790627323",
+    "identifier": "default.sternwatch_lake_1790940969",
     "checks": [
       {
         "name": "table row count equals the messages published, duplicates included",
@@ -362,12 +362,6 @@
         "passed": true,
         "detail": "43 distinct positions for 43 rows",
         "numbers": {}
-      },
-      {
-        "name": "the table has typed columns from the registered Avro schema",
-        "passed": true,
-        "detail": "columns: id, run_id, seq, ts, type, policy_id, producer, envelope_version, step, capability, effect, reason, data_json, _kafka_header, _kafka_key, _kafka_metadata",
-        "numbers": {}
       }
     ],
     "numbers": {
@@ -375,88 +369,19 @@
       "rows": 43,
       "distinct": 40,
       "ledger_events": 40,
-      "visible_after_s": 42.460979307,
+      "visible_after_s": 42.402926342,
       "commit_interval_ms": 2000,
-      "snapshot_id": 4969338951659835837,
+      "snapshot_id": 2250807894193691667,
       "columns": [
-        "id",
-        "run_id",
-        "seq",
-        "ts",
-        "type",
-        "policy_id",
-        "producer",
-        "envelope_version",
-        "step",
-        "capability",
-        "effect",
-        "reason",
-        "data_json",
+        "_kafka_value",
         "_kafka_header",
         "_kafka_key",
         "_kafka_metadata"
       ],
-      "layout": "typed columns (Avro by schema id, flattened)",
-      "iceberg_schema": [
-        "id: string",
-        "run_id: string",
-        "seq: long",
-        "ts: string",
-        "type: string",
-        "policy_id: string",
-        "producer: string",
-        "envelope_version: string",
-        "step: string",
-        "capability: string",
-        "effect: string",
-        "reason: string",
-        "data_json: string",
-        "_kafka_header: map<string, binary>",
-        "_kafka_key: string",
-        "_kafka_metadata: struct<19: partition: required int (Partition id), 20: offset: required long (Record offset), 21: timestamp: required long (Record timestamp)>"
-      ]
+      "layout": "string value (JSON text)",
+      "iceberg_schema": []
     },
     "sql": {
-      "tool decisions by capability, typed columns only": {
-        "sql": "SELECT capability, CASE type WHEN 'tool_call_allowed' THEN 'ALLOWED' ELSE 'DENIED' END AS decision, COUNT(DISTINCT id) AS decisions FROM iceberg WHERE type IN ('tool_call_allowed', 'tool_call_denied') GROUP BY 1, 2 ORDER BY 1, 2",
-        "columns": [
-          "capability",
-          "decision",
-          "decisions"
-        ],
-        "rows": [
-          {
-            "capability": "draft_summary",
-            "decision": "ALLOWED",
-            "decisions": 1
-          },
-          {
-            "capability": "draft_summary",
-            "decision": "DENIED",
-            "decisions": 1
-          },
-          {
-            "capability": "forecast_next_year",
-            "decision": "ALLOWED",
-            "decisions": 1
-          },
-          {
-            "capability": "revenue_by_year",
-            "decision": "ALLOWED",
-            "decisions": 2
-          },
-          {
-            "capability": "send_report",
-            "decision": "ALLOWED",
-            "decisions": 1
-          },
-          {
-            "capability": "top_genres_by_tracks_sold",
-            "decision": "DENIED",
-            "decisions": 1
-          }
-        ]
-      },
       "events per run": {
         "sql": "SELECT run_id, COUNT(*) AS rows_in_lake, COUNT(DISTINCT seq) AS distinct_events, MIN(seq) AS first_seq, MAX(seq) AS last_seq FROM lake GROUP BY run_id ORDER BY run_id",
         "columns": [
@@ -582,7 +507,7 @@
       "catalog_uri": "http://localhost:8181",
       "pyiceberg": "0.12.0",
       "duckdb": "1.5.6",
-      "generated_at": "2026-09-28T20:29:29+00:00"
+      "generated_at": "2026-10-02T11:36:55+00:00"
     }
   }
 }

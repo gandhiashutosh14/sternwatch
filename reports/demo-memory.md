@@ -1,8 +1,8 @@
 # ReplayProof
 
-**PASSED**: 8 of 8 checks. Generated 2026-09-19T03:48:46+00:00 at revision `325d4c9` with `tracewake demo`.
+**PASSED**: 8 of 8 checks. Generated 2026-10-02T11:36:19+00:00 at revision `0b44a24` with `sternwatch demo`.
 
-Log: MemoryBus (in-process, 3 partitions per topic). Python 3.11.9 on Windows-10-10.0.26200-SP0; tracewake 0.1.0a1, kafka-python 3.0.11.
+Log: MemoryBus (in-process, 3 partitions per topic); encoding: canonical JSON. Python 3.11.9 on Windows-10-10.0.26200-SP0; sternwatch 0.4.0a1, kafka-python 3.0.11.
 
 ## Numbers
 
@@ -10,8 +10,8 @@ Log: MemoryBus (in-process, 3 partitions per topic). Python 3.11.9 on Windows-10
 |---|---|
 | Runs published | 4 |
 | Events published | 40 |
-| Publish time | 0.002 s (24662 events/s) |
-| Ledger rebuild time (first read from offset 0) | 0.000 s |
+| Publish time | 0.002 s (21173 events/s) |
+| Ledger rebuild time (first read from offset 0) | 0.002 s |
 | Duplicate deliveries injected | 3 |
 | Decisions replayed | 7 |
 
@@ -30,7 +30,7 @@ Log: MemoryBus (in-process, 3 partitions per topic). Python 3.11.9 on Windows-10
 
 # PolicyEcho result
 
-Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Generated 2026-09-19T03:48:46+00:00.
+Old policy `cc9add63cb2c` (v1.json) -> new policy `2dc3e7fa29a9` (v2.json). Generated 2026-10-02T11:36:19+00:00.
 
 ## What changed in the policy
 
