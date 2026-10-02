@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tracewake import live
-from tracewake.bus import MemoryBus
-from tracewake.live import LIVE_OBJECTIVES, default_prefix, run_ids_for, run_live, runs_in_topic
-from tracewake.policy import Policy
+from sternwatch import live
+from sternwatch.bus import MemoryBus
+from sternwatch.live import LIVE_OBJECTIVES, default_prefix, run_ids_for, run_live, runs_in_topic
+from sternwatch.policy import Policy
 
 
 def test_run_ids_keep_their_digests_and_the_default_prefix_is_the_utc_time():

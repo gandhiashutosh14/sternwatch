@@ -6,11 +6,11 @@ import pytest
 pa = pytest.importorskip("pyarrow")
 pytest.importorskip("duckdb")
 
-from tracewake.bus import MemoryBus  # noqa: E402
-from tracewake.lake import (KEY_COL, META_COL, VALUE_COL, catalog_properties, compare, parse_rows, sql_queries,  # noqa: E402
+from sternwatch.bus import MemoryBus  # noqa: E402
+from sternwatch.lake import (KEY_COL, META_COL, VALUE_COL, catalog_properties, compare, parse_rows, sql_queries,  # noqa: E402
                             table_topic_configs, wait_for_table)
-from tracewake.ledger import WakeLedger  # noqa: E402
-from tracewake.recorder import Recorder, load_trace_dir  # noqa: E402
+from sternwatch.ledger import WatchLedger  # noqa: E402
+from sternwatch.recorder import Recorder, load_trace_dir  # noqa: E402
 
 POLICY = "p1"
 
@@ -39,7 +39,7 @@ def lake_table_from(bus, *, as_bytes=False):
 
 
 def ledger_from(bus):
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     return ledger
 

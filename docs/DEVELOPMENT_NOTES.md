@@ -1,6 +1,6 @@
 # Development notes
 
-How TRACEWAKE was built. It was written from scratch on 2026-09-19; there is no earlier history.
+How STERNWATCH was built. It was written from scratch on 2026-09-19; there is no earlier history.
 
 ## Why this project exists
 
@@ -9,7 +9,7 @@ every tool call ([governed-agent-orchestrator](https://github.com/gandhiashutosh
 and a replay of recorded decisions under changed rules ([regimeforge](https://github.com/gandhiashutosh14/regimeforge)).
 A note introducing AutoMQ, an open-source Kafka on object storage, raised the question of what a
 Kafka log looks like when the events are agent decisions. AutoMQ's own writing argues for exactly
-that, but neither of its repositories contains an agent example. TRACEWAKE is the smallest honest
+that, but neither of its repositories contains an agent example. STERNWATCH is the smallest honest
 answer: publish the orchestrator's journal to the log, rebuild it, replay it, and prove it.
 
 ## Design decisions
@@ -17,7 +17,7 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
 - **The envelope carries the policy id.** The orchestrator does not record which catalog was in
   force. The Recorder stamps a hash of the catalog's governing content (constraints, effect classes,
   approval requirements) on every envelope, so the ledger can answer "under which rules?".
-- **Replay reuses the guard's exact semantics.** `tracewake/policy.py` re-implements the
+- **Replay reuses the guard's exact semantics.** `sternwatch/policy.py` re-implements the
   orchestrator's `check_constraints` line for line rather than translating constraints into another
   rule language. A test compares the two implementations over a grid of specs and values when the
   orchestrator is importable, which CI ensures.
@@ -72,7 +72,7 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
 - **Python 3.11 for the live path.** The first CI run failed on Python 3.10: LangGraph's `interrupt()`
   in an async node needs context propagation that Python 3.11 added. The orchestrator's CI had only
   ever run 3.11, so its "3.10+" claim was untested; it now requires and tests 3.11 and 3.12, and
-  TRACEWAKE skips the live tests on 3.10.
+  STERNWATCH skips the live tests on 3.10.
 
 ## What the tests caught
 
@@ -107,11 +107,11 @@ answer: publish the orchestrator's journal to the log, rebuild it, replay it, an
 | Check | Result |
 |---|---|
 | `pytest -q` | 83 passed |
-| `tracewake demo` (in-memory log) | 8 of 8 checks; 4 runs, 40 events, 7 decisions, 2 flipped, 0 mismatches ([`reports/demo-memory.md`](../reports/demo-memory.md)) |
-| `tracewake proof --bootstrap localhost:9092` against AutoMQ 1.7.4 + MinIO (CI) | 8 of 8 checks, same counts; publish 0.99 s, ledger rebuild 0.14 s ([`reports/replayproof-automq-2026-09-19.md`](../reports/replayproof-automq-2026-09-19.md)) |
-| `tracewake lake ...` against AutoMQ 1.7.4 Table Topic + Iceberg REST catalog (CI) | 8 of 8 proof checks and 6 of 6 lake checks; 43 rows, 40 distinct events, 4 of 4 run digests equal, table fully visible 42.5 s after the last publish ([`reports/lakemirror-automq-2026-09-28.md`](../reports/lakemirror-automq-2026-09-28.md)) |
-| `tracewake lake --typed ...` with the schema registry (CI) | 8 of 8 proof checks and 7 of 7 lake checks; typed Iceberg columns; same 43 rows and 40 distinct events ([`reports/lakemirror-typed-automq-2026-09-29.md`](../reports/lakemirror-typed-automq-2026-09-29.md)) |
-| `tracewake live --bootstrap localhost:9092 ...` against AutoMQ (CI) | 7 of 7 checks; 63 events emitted, published and rebuilt; 5 of 5 runs identical to the agent's journal; 10 decisions replayed, 0 mismatches, 3 flipped ([`reports/live-automq-2026-09-29.md`](../reports/live-automq-2026-09-29.md)) |
+| `sternwatch demo` (in-memory log) | 8 of 8 checks; 4 runs, 40 events, 7 decisions, 2 flipped, 0 mismatches ([`reports/demo-memory.md`](../reports/demo-memory.md)) |
+| `sternwatch proof --bootstrap localhost:9092` against AutoMQ 1.7.4 + MinIO (CI) | 8 of 8 checks, same counts; publish 0.99 s, ledger rebuild 0.14 s ([`reports/replayproof-automq-2026-09-19.md`](../reports/replayproof-automq-2026-09-19.md)) |
+| `sternwatch lake ...` against AutoMQ 1.7.4 Table Topic + Iceberg REST catalog (CI) | 8 of 8 proof checks and 6 of 6 lake checks; 43 rows, 40 distinct events, 4 of 4 run digests equal, table fully visible 42.5 s after the last publish ([`reports/lakemirror-automq-2026-09-28.md`](../reports/lakemirror-automq-2026-09-28.md)) |
+| `sternwatch lake --typed ...` with the schema registry (CI) | 8 of 8 proof checks and 7 of 7 lake checks; typed Iceberg columns; same 43 rows and 40 distinct events ([`reports/lakemirror-typed-automq-2026-09-29.md`](../reports/lakemirror-typed-automq-2026-09-29.md)) |
+| `sternwatch live --bootstrap localhost:9092 ...` against AutoMQ (CI) | 7 of 7 checks; 63 events emitted, published and rebuilt; 5 of 5 runs identical to the agent's journal; 10 decisions replayed, 0 mismatches, 3 flipped ([`reports/live-automq-2026-09-29.md`](../reports/live-automq-2026-09-29.md)) |
 
 ## What is and is not claimed
 

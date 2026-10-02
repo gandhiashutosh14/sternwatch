@@ -1,8 +1,8 @@
-"""ReplayProof: the checks that make the rest of TRACEWAKE a claim rather than a hope.
+"""ReplayProof: the checks that make the rest of STERNWATCH a claim rather than a hope.
 
 Given a log, recorded runs and two policies, the proof publishes the runs, rebuilds the ledger
 from the log alone, destroys it and rebuilds it again, delivers a run twice, replays under the new
-policy, and checks that every property TRACEWAKE promises actually held. The report records the
+policy, and checks that every property STERNWATCH promises actually held. The report records the
 environment, the numbers and the command, so a reader can tell a real run from a description.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from . import __version__
 from .bus import Bus
 from .echo import EchoReport, echo
 from .envelope import digest_envelopes, envelopes_for
-from .ledger import WakeLedger
+from .ledger import WatchLedger
 from .policy import Policy
 from .recorder import Recorder
 
@@ -60,7 +60,7 @@ class ProofReport:
         lines = ["# ReplayProof", "",
                  f"**{verdict}**: {sum(c.passed for c in self.checks)} of {len(self.checks)} checks. "
                  f"Generated {env['generated_at']} at revision `{env['revision']}` with `{self.command}`.", "",
-                 f"Log: {env['bus']}; encoding: {env.get('codec', 'canonical JSON')}. Python {env['python']} on {env['platform']}; tracewake {env['tracewake']}, "
+                 f"Log: {env['bus']}; encoding: {env.get('codec', 'canonical JSON')}. Python {env['python']} on {env['platform']}; sternwatch {env['sternwatch']}, "
                  f"kafka-python {env['kafka_python']}.", "",
                  "## Numbers", "",
                  "| Measure | Value |", "|---|---|",
@@ -97,7 +97,7 @@ def _kafka_python_version() -> str:
 
 
 def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: Policy, new: Policy, *,
-              ledger_path: str = ":memory:", command: str = "tracewake proof", codec=None) -> ProofReport:
+              ledger_path: str = ":memory:", command: str = "sternwatch proof", codec=None) -> ProofReport:
     checks: List[Check] = []
     numbers: Dict[str, Any] = {}
 
@@ -110,7 +110,7 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
                       for run_id, events in runs.items()}
 
     # 2. Rebuild the ledger from the log alone.
-    ledger = WakeLedger(ledger_path)
+    ledger = WatchLedger(ledger_path)
     ledger.reset()
     t1 = time.perf_counter()
     stats = ledger.ingest(bus, topic, codec)
@@ -159,6 +159,6 @@ def run_proof(bus: Bus, topic: str, runs: Dict[str, List[Dict[str, Any]]], old: 
                     "ledger_events": ledger.count()})
     environment = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "revision": _revision(),
                    "bus": bus.describe(), "codec": recorder.codec.describe(), "python": platform.python_version(), "platform": platform.platform(),
-                   "tracewake": __version__, "kafka_python": _kafka_python_version(), "topic": topic}
+                   "sternwatch": __version__, "kafka_python": _kafka_python_version(), "topic": topic}
     ledger.close()
     return ProofReport(checks, report_ledger, environment, numbers, command)

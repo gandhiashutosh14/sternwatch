@@ -38,10 +38,10 @@ jobs:
         run: python -m pip install -e ../governed-agent-orchestrator
       - run: python -m pytest -q
       - name: Demo on the in-memory log
-        run: tracewake demo --out artifacts/demo-memory.md --json artifacts/demo-memory.json
+        run: sternwatch demo --out artifacts/demo-memory.md --json artifacts/demo-memory.json
       - name: Live recording on the in-memory log
         if: matrix.python != '3.10'
-        run: tracewake live --orchestrator ../governed-agent-orchestrator --out artifacts/live-memory.md --json artifacts/live-memory.json
+        run: sternwatch live --orchestrator ../governed-agent-orchestrator --out artifacts/live-memory.md --json artifacts/live-memory.json
       - uses: actions/upload-artifact@v4
         with:
           name: demo-memory-py${{ matrix.python }}
@@ -66,9 +66,9 @@ jobs:
       - name: Wait for the broker
         run: python scripts/wait_for_broker.py localhost:9092 --timeout 240
       - name: ReplayProof
-        run: tracewake proof --bootstrap localhost:9092 --out artifacts/replayproof-automq.md --json artifacts/replayproof-automq.json
+        run: sternwatch proof --bootstrap localhost:9092 --out artifacts/replayproof-automq.md --json artifacts/replayproof-automq.json
       - name: Live recording
-        run: tracewake live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator --out artifacts/live-automq.md --json artifacts/live-automq.json
+        run: sternwatch live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator --out artifacts/live-automq.md --json artifacts/live-automq.json
       - name: Collect broker logs
         if: always()
         run: |
@@ -111,7 +111,7 @@ jobs:
       - name: LakeMirror
         run: |
           if [ "${{ matrix.layout }}" = "typed" ]; then TYPED="--typed --registry http://localhost:8081"; else TYPED=""; fi
-          tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 $TYPED \
+          sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 $TYPED \
             --out artifacts/lakemirror-${{ matrix.layout }}.md --json artifacts/lakemirror-${{ matrix.layout }}.json
       - name: Collect logs
         if: always()

@@ -8,9 +8,9 @@ if sys.version_info < (3, 11):
 pytest.importorskip("langgraph")
 pytest.importorskip("orchestrator.graph")
 
-from tracewake.bus import MemoryBus  # noqa: E402
-from tracewake.live import LIVE_OBJECTIVES, run_live  # noqa: E402
-from tracewake.policy import Policy  # noqa: E402
+from sternwatch.bus import MemoryBus  # noqa: E402
+from sternwatch.live import LIVE_OBJECTIVES, run_live  # noqa: E402
+from sternwatch.policy import Policy  # noqa: E402
 
 
 def test_live_runs_stream_into_the_log_and_replay(policies_dir, tmp_path, monkeypatch):

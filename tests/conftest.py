@@ -1,7 +1,7 @@
 """Test configuration.
 
 If a sibling checkout of governed-agent-orchestrator exists and the package is not installed, put it
-on the path so the cross-check tests (TRACEWAKE's constraint semantics against the original guard,
+on the path so the cross-check tests (STERNWATCH's constraint semantics against the original guard,
 the Recorder against the real DecisionTrace) can run locally as they do in CI.
 """
 from __future__ import annotations

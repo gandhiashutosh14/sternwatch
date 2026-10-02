@@ -1,5 +1,5 @@
 # Single-node AutoMQ with Table Topic enabled: MinIO for storage, an Apache Iceberg REST catalog,
-# and the broker configured to write table-topic records into Iceberg. For TRACEWAKE's LakeMirror
+# and the broker configured to write table-topic records into Iceberg. For STERNWATCH's LakeMirror
 # proof in CI and for local runs (Docker required).
 #
 # Adapted from AutoMQ's docker/table_topic/docker-compose.yml at tag 1.7.4 (Apache License 2.0,
@@ -13,7 +13,7 @@
 #
 #   docker compose -f docker/compose.lake.yaml up -d
 #   python scripts/wait_for_broker.py localhost:9092
-#   tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000
+#   sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000
 #   docker compose -f docker/compose.lake.yaml down -v
 
 services:

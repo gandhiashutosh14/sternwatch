@@ -1,12 +1,12 @@
 """CLI.
 
-  tracewake demo   [--from policies/v1.json --to policies/v2.json] [--fixtures fixtures/orchestrator] [--out reports/demo.md]
-  tracewake proof  --bootstrap host:9092 [--topic ...] [--from ...] [--to ...] [--fixtures ...] [--out ...] [--json ...]
-  tracewake lake   --bootstrap host:9092 --catalog http://host:8181 --s3-endpoint http://host:9000 [--typed --registry URL] ...
-  tracewake live   [--bootstrap host:9092] [--orchestrator ../governed-agent-orchestrator] [--out ...] [--json ...]
-  tracewake publish --bootstrap host:9092 --topic T --policy policies/v1.json TRACE.jsonl [TRACE.jsonl ...]
-  tracewake ledger --bootstrap host:9092 --topic T --db ledger.db [--typed --registry URL]
-  tracewake echo   --from policies/v1.json --to policies/v2.json (--fixtures DIR | --db ledger.db) [--out ...] [--json ...]
+  sternwatch demo   [--from policies/v1.json --to policies/v2.json] [--fixtures fixtures/orchestrator] [--out reports/demo.md]
+  sternwatch proof  --bootstrap host:9092 [--topic ...] [--from ...] [--to ...] [--fixtures ...] [--out ...] [--json ...]
+  sternwatch lake   --bootstrap host:9092 --catalog http://host:8181 --s3-endpoint http://host:9000 [--typed --registry URL] ...
+  sternwatch live   [--bootstrap host:9092] [--orchestrator ../governed-agent-orchestrator] [--out ...] [--json ...]
+  sternwatch publish --bootstrap host:9092 --topic T --policy policies/v1.json TRACE.jsonl [TRACE.jsonl ...]
+  sternwatch ledger --bootstrap host:9092 --topic T --db ledger.db [--typed --registry URL]
+  sternwatch echo   --from policies/v1.json --to policies/v2.json (--fixtures DIR | --db ledger.db) [--out ...] [--json ...]
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from typing import Optional, Sequence
 
 from .bus import KafkaBus, MemoryBus
 from .echo import echo
-from .ledger import WakeLedger
+from .ledger import WatchLedger
 from .policy import Policy
 from .proof import run_proof
 from .recorder import Recorder, load_trace_dir
@@ -45,7 +45,7 @@ def _out(text: str) -> None:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    p = argparse.ArgumentParser(prog="tracewake", description="Event-sourced governance for AI agents.")
+    p = argparse.ArgumentParser(prog="sternwatch", description="Event-sourced governance for AI agents.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pol = argparse.ArgumentParser(add_help=False)
@@ -107,17 +107,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"no trace files found in {args.fixtures}", file=sys.stderr)
             return 2
         if args.cmd == "demo":
-            bus, topic, command = MemoryBus(), "tracewake.demo", "tracewake demo"
+            bus, topic, command = MemoryBus(), "sternwatch.demo", "sternwatch demo"
         elif args.cmd == "proof":
             bus = KafkaBus(args.bootstrap, partitions=args.partitions)
-            topic = args.topic or f"tracewake.proof.{int(time.time())}"
-            command = f"tracewake proof --bootstrap {args.bootstrap} --topic {topic}"
+            topic = args.topic or f"sternwatch.proof.{int(time.time())}"
+            command = f"sternwatch proof --bootstrap {args.bootstrap} --topic {topic}"
         else:
             from .lake import table_topic_configs
             bus = KafkaBus(args.bootstrap, partitions=args.partitions,
                            topic_configs=table_topic_configs(args.commit_interval_ms, typed=args.typed))
-            topic = args.topic or f"tracewake_lake_{'typed_' if args.typed else ''}{int(time.time())}"
-            command = (f"tracewake lake --bootstrap {args.bootstrap} --catalog {args.catalog} "
+            topic = args.topic or f"sternwatch_lake_{'typed_' if args.typed else ''}{int(time.time())}"
+            command = (f"sternwatch lake --bootstrap {args.bootstrap} --catalog {args.catalog} "
                        f"--s3-endpoint {args.s3_endpoint} --topic {topic}" + (f" --typed --registry {args.registry}" if args.typed else ""))
         codec = None
         if args.cmd == "lake" and args.typed:
@@ -131,7 +131,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.cmd == "lake":
                 from .lake import catalog_properties, run_lake
                 published = report.numbers["events"] + report.numbers["duplicates_injected"]
-                ledger = WakeLedger()
+                ledger = WatchLedger()
                 ledger.ingest(bus, topic, codec)
                 lake_report = run_lake(
                     catalog_properties(args.catalog, args.s3_endpoint, args.s3_access_key, args.s3_secret_key, args.s3_region),
@@ -153,9 +153,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         old, new = Policy.load(args.old), Policy.load(args.new)
         if args.bootstrap:
             bus = KafkaBus(args.bootstrap, partitions=args.partitions)
-            topic = args.topic or f"tracewake.live.{int(time.time())}"
+            topic = args.topic or f"sternwatch.live.{int(time.time())}"
         else:
-            bus, topic = MemoryBus(), args.topic or "tracewake.live"
+            bus, topic = MemoryBus(), args.topic or "sternwatch.live"
         try:
             report = run_live(bus, topic, old, new, orchestrator_root=args.orchestrator)
         finally:
@@ -185,7 +185,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             from .codec import AvroCodec, SchemaRegistry
             codec = AvroCodec(SchemaRegistry(args.registry), subject=f"{topic}-value")
         bus = KafkaBus(args.bootstrap, partitions=args.partitions)
-        ledger = WakeLedger(args.db)
+        ledger = WatchLedger(args.db)
         try:
             stats = ledger.ingest(bus, topic, codec)
             _out(json.dumps({"ingest": stats.to_dict(), "runs": [ledger.summary(r) for r in ledger.runs()]},
@@ -198,7 +198,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.cmd == "echo":
         old, new = Policy.load(args.old), Policy.load(args.new)
         if args.db:
-            ledger = WakeLedger(args.db)
+            ledger = WatchLedger(args.db)
             runs = ledger.all_events()
             ledger.close()
         else:

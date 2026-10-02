@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from tracewake.policy import CapabilityPolicy, Policy, check_constraints, diff
+from sternwatch.policy import CapabilityPolicy, Policy, check_constraints, diff
 
 
 def test_load_and_policy_id(policies_dir):

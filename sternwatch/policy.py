@@ -1,7 +1,7 @@
 """Policy: the part of a capability catalog that decides whether a tool call is allowed.
 
 The governed-agent-orchestrator loads a capability catalog (``capabilities.json``) and its guard
-checks every tool call's arguments against the constraints declared there. TRACEWAKE reads the
+checks every tool call's arguments against the constraints declared there. STERNWATCH reads the
 same file, keeps only what governs a decision (constraints, effect class, approval requirement),
 identifies the policy by a hash of that content, and re-implements ``check_constraints`` with the
 same semantics so a replayed decision matches the original guard. The unit tests cross-check this

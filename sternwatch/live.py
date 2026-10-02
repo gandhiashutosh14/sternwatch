@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 from .bus import Bus
 from .echo import echo
 from .envelope import digest_envelopes, envelopes_for
-from .ledger import WakeLedger
+from .ledger import WatchLedger
 from .policy import Policy
 from .proof import Check, _revision
 from .recorder import Recorder
@@ -179,7 +179,7 @@ def run_live(bus: Bus, topic: str, old: Policy, new: Policy, *, orchestrator_roo
     runs = asyncio.run(_run_all(api, catalog, recorder, objectives, run_ids))
     bus.flush()
 
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ours = {r.encode("utf-8") for r in run_ids}
     t0 = time.perf_counter()
     stats = ledger.ingest_messages([m for m in bus.consume(topic) if m.key in ours])   # this invocation's runs only

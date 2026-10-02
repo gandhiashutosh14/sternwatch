@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from tracewake.bus import MemoryBus
-from tracewake.envelope import TraceEnvelope
-from tracewake.recorder import Recorder, load_trace_dir, read_trace_file
+from sternwatch.bus import MemoryBus
+from sternwatch.envelope import TraceEnvelope
+from sternwatch.recorder import Recorder, load_trace_dir, read_trace_file
 
 
 class FakeTrace:

@@ -1,7 +1,7 @@
 """The topic-readiness wait, driven by fake admin and consumer clients, for both metadata shapes."""
 import pytest
 
-from tracewake.bus import KafkaBus, _partition_view, _topic_name
+from sternwatch.bus import KafkaBus, _partition_view, _topic_name
 
 
 class FakeAdmin:

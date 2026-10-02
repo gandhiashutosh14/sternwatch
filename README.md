@@ -1,18 +1,18 @@
-# TRACEWAKE
+# STERNWATCH
 
-**Event-sourced governance for AI agents.** *Every decision leaves a wake. TRACEWAKE makes it replayable.*
+**Event-sourced governance for AI agents.** *Every decision leaves a wake. STERNWATCH makes it replayable.*
 
-[![tests](https://github.com/gandhiashutosh14/tracewake/actions/workflows/ci.yml/badge.svg)](https://github.com/gandhiashutosh14/tracewake/actions/workflows/ci.yml)
+[![tests](https://github.com/gandhiashutosh14/sternwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/gandhiashutosh14/sternwatch/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Log](https://img.shields.io/badge/log-Kafka%20protocol%20%C2%B7%20AutoMQ%201.7-orange)
 ![Lake](https://img.shields.io/badge/lake-Apache%20Iceberg%20via%20Table%20Topic-blue)
-![Status](https://img.shields.io/badge/status-v0.3%20prototype-yellow)
+![Status](https://img.shields.io/badge/status-v0.4%20prototype-yellow)
 
 > **In plain English:** an AI agent that can act (query data, send a report, issue a refund) makes a
 > stream of decisions: which tool to call, with what values, whether a rule allowed it, whether a
 > person approved it. Most systems keep that history as logs, which get rotated and cannot be
-> questioned later. TRACEWAKE treats it as evidence. Each decision is written to a durable,
+> questioned later. STERNWATCH treats it as evidence. Each decision is written to a durable,
 > ordered, Kafka-compatible event log (AutoMQ), the full ledger of a run can be rebuilt from that
 > log alone, and when the rules change, the recorded decisions can be re-decided under the new
 > rules without repeating any side effect. The same stream also lands in an Apache Iceberg table
@@ -41,7 +41,7 @@ questions arrive later:
 
 The first two questions are what an append-only, replicated event log answers, and Kafka is the
 protocol most organisations already run for exactly that. AutoMQ implements that protocol on
-object storage, which makes keeping every decision cheap. The third question is what TRACEWAKE
+object storage, which makes keeping every decision cheap. The third question is what STERNWATCH
 adds: a replay that re-decides recorded actions under a new policy and says, for each one,
 *unchanged*, *flipped*, or *the log does not hold enough evidence to say*.
 
@@ -58,9 +58,9 @@ made by an autonomous agent.
 | Who has this problem? | Anyone deploying agents that act on real systems: platform teams, risk and compliance functions, and the engineers who answer "why did the agent do that?" |
 | What does this repository do? | Publishes a governed agent's decision trace to a Kafka-compatible log as versioned envelopes, rebuilds the ledger from the log alone, and replays recorded tool decisions under a changed policy. A proof pack verifies all of it. |
 | What has been shown so far? | On four recorded runs (40 events): the ledger rebuilt from the log equals the source, survives being destroyed and rebuilt, and ignores duplicate delivery; 7 decisions were replayed under a changed policy with 0 mismatches against the record, 2 flipped and 0 needing evidence; 8 of 8 checks pass on the in-memory log ([report](reports/demo-memory.md)) and, identically, against a real AutoMQ 1.7.4 + MinIO cluster in CI ([report](reports/replayproof-automq-2026-09-19.md)). The Iceberg table AutoMQ wrote from the same topic held all 43 published messages, its 40 distinct events matched the ledger digest for digest, and four SQL questions were answered from it ([report](reports/lakemirror-automq-2026-09-28.md)); with the envelope registered as an Avro schema, the broker wrote typed columns and every check held again ([report](reports/lakemirror-typed-automq-2026-09-29.md)). A live run of the orchestrator streamed 63 events into AutoMQ as it made its decisions, and all 5 runs rebuilt from the log equal the agent's own journal, event for event ([report](reports/live-automq-2026-09-29.md)). 92 unit tests. |
-| How mature is it? | v0.3 prototype. The runs come from the author's [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on a public sample database, with a deterministic planner and no language model. |
+| How mature is it? | v0.4 prototype. The runs come from the author's [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on a public sample database, with a deterministic planner and no language model. |
 | What it is not | Not a Kafka fork or an AutoMQ plug-in; not a benchmark of AutoMQ; not a full policy engine. It replays argument constraints, effect classes and approval requirements, which is what the orchestrator's guard decides. |
-| What it would take to use it for real | Subscribing the Recorder in your own agent runtime (one line, as `tracewake live` does with the orchestrator), retention and access rules on the topic and the table, and a policy format for your own tool catalog. |
+| What it would take to use it for real | Subscribing the Recorder in your own agent runtime (one line, as `sternwatch live` does with the orchestrator), retention and access rules on the topic and the table, and a policy format for your own tool catalog. |
 
 ## How it works, end to end
 
@@ -68,7 +68,7 @@ made by an autonomous agent.
 flowchart LR
     A["Governed agent runtime<br/>plan, tool calls, approvals"] -->|"DecisionTrace events"| B["TraceEnvelope<br/>versioned, policy-stamped"]
     B -->|"key = run id"| C[("AutoMQ<br/>Kafka-compatible log<br/>ordered, durable")]
-    C --> D["WakeLedger<br/>rebuild any run from offset 0"]
+    C --> D["WatchLedger<br/>rebuild any run from offset 0"]
     C --> E["PolicyEcho<br/>re-decide under policy v2"]
     D --> F["What happened?"]
     E --> G["What would change<br/>under today's rules?"]
@@ -85,22 +85,22 @@ flowchart LR
    four recorded runs with their provenance).
 2. **Recorder wraps each event in a TraceEnvelope** and publishes it with the run id as the message
    key, so a run stays in order on one partition. The envelope carries the id of the policy in
-   force, a hash of the catalog's constraints ([`tracewake/envelope.py`](tracewake/envelope.py),
-   [`tracewake/recorder.py`](tracewake/recorder.py)).
+   force, a hash of the catalog's constraints ([`sternwatch/envelope.py`](sternwatch/envelope.py),
+   [`sternwatch/recorder.py`](sternwatch/recorder.py)).
 3. **The log keeps it.** Locally that is an in-memory log with partitions and offsets; in CI it is
    AutoMQ 1.7.4 with MinIO as its object storage, spoken to through kafka-python
-   ([`tracewake/bus.py`](tracewake/bus.py), [`docker/compose.yaml`](docker/compose.yaml)).
-4. **WakeLedger reads the topic from offset zero** and inserts every envelope under the key
+   ([`sternwatch/bus.py`](sternwatch/bus.py), [`docker/compose.yaml`](docker/compose.yaml)).
+4. **WatchLedger reads the topic from offset zero** and inserts every envelope under the key
    `(run_id, seq)`. Re-reading, restarting, or receiving a message twice changes nothing
-   ([`tracewake/ledger.py`](tracewake/ledger.py)).
+   ([`sternwatch/ledger.py`](sternwatch/ledger.py)).
 5. **PolicyEcho recovers each recorded decision's arguments from the log**, recomputes the decision
    under the old policy to prove it matches the record, then recomputes it under the new policy
-   ([`tracewake/echo.py`](tracewake/echo.py), [`tracewake/policy.py`](tracewake/policy.py)).
+   ([`sternwatch/echo.py`](sternwatch/echo.py), [`sternwatch/policy.py`](sternwatch/policy.py)).
 6. **ReplayProof checks all of the above** and writes a report with the numbers, the environment
-   and the commit ([`tracewake/proof.py`](tracewake/proof.py)).
+   and the commit ([`sternwatch/proof.py`](sternwatch/proof.py)).
 7. **LakeMirror reads the Iceberg table** that AutoMQ's Table Topic wrote from the same topic, checks it
    against the ledger, and runs reviewer queries over it with DuckDB
-   ([`tracewake/lake.py`](tracewake/lake.py), [`docker/compose.lake.yaml`](docker/compose.lake.yaml)).
+   ([`sternwatch/lake.py`](sternwatch/lake.py), [`docker/compose.lake.yaml`](docker/compose.lake.yaml)).
 
 **Worked example.** Policy v1 allows reports to `example.com`. Policy v2 moves the allowed domain
 to `example.org` and caps a ranking query at two rows. Replaying the four recorded runs
@@ -123,16 +123,16 @@ re-decided, because a call budget is runtime state, not policy.
 No broker is needed for the first command.
 
 ```bash
-git clone https://github.com/gandhiashutosh14/tracewake.git
+git clone https://github.com/gandhiashutosh14/sternwatch.git
 git clone https://github.com/gandhiashutosh14/governed-agent-orchestrator.git   # next to it: the live agent
-cd tracewake
+cd sternwatch
 python -m venv .venv && . .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-pip install -e ../governed-agent-orchestrator        # Python 3.11+; tracewake live and the live tests need it
+pip install -e ../governed-agent-orchestrator        # Python 3.11+; sternwatch live and the live tests need it
 pytest -q                                            # 92 passed
-tracewake demo --out reports/demo-memory.md          # in-memory log: 8 of 8 checks
-tracewake echo --from policies/v1.json --to policies/v2.json
-tracewake live --orchestrator ../governed-agent-orchestrator   # a live agent streaming into the log (Python 3.11+)
+sternwatch demo --out reports/demo-memory.md          # in-memory log: 8 of 8 checks
+sternwatch echo --from policies/v1.json --to policies/v2.json
+sternwatch live --orchestrator ../governed-agent-orchestrator   # a live agent streaming into the log (Python 3.11+)
 ```
 
 Without the second `pip install` (not possible on Python 3.10), `pytest -q` reports 89 passed,
@@ -146,8 +146,8 @@ Against a real AutoMQ cluster (Docker required; this is what CI does):
 ```bash
 docker compose -f docker/compose.yaml up -d          # AutoMQ 1.7.4 + MinIO
 python scripts/wait_for_broker.py localhost:9092
-tracewake proof --bootstrap localhost:9092 --out reports/replayproof-automq.md
-tracewake live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator
+sternwatch proof --bootstrap localhost:9092 --out reports/replayproof-automq.md
+sternwatch live --bootstrap localhost:9092 --orchestrator ../governed-agent-orchestrator
 docker compose -f docker/compose.yaml down -v
 ```
 
@@ -157,14 +157,14 @@ With Table Topic and an Iceberg REST catalog (the `lakemirror` CI job):
 pip install -e ".[lake]"                              # adds PyIceberg and DuckDB
 docker compose -f docker/compose.lake.yaml up -d     # AutoMQ 1.7.4 + MinIO + Iceberg REST catalog
 python scripts/wait_for_broker.py localhost:9092
-tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --out reports/lakemirror-automq.md
+sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --out reports/lakemirror-automq.md
 # typed columns: Avro through the schema registry in the same compose file
-tracewake lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --typed --registry http://localhost:8081
+sternwatch lake --bootstrap localhost:9092 --catalog http://localhost:8181 --s3-endpoint http://localhost:9000 --typed --registry http://localhost:8081
 docker compose -f docker/compose.lake.yaml down -v
 ```
 
-`tracewake publish` and `tracewake ledger` do the two halves separately against any topic
-(`tracewake ledger --typed --registry URL` reads a topic that `tracewake lake --typed` wrote), and
+`sternwatch publish` and `sternwatch ledger` do the two halves separately against any topic
+(`sternwatch ledger --typed --registry URL` reads a topic that `sternwatch lake --typed` wrote), and
 [`scripts/make_fixtures.py`](scripts/make_fixtures.py) re-records the fixtures from a checkout of
 the orchestrator.
 
@@ -198,17 +198,17 @@ are what that machine measured on 40 events; they are not a benchmark of AutoMQ.
 
 | Subsystem | What it is | Where |
 |---|---|---|
-| **TraceEnvelope** | The versioned event: `run_id`, `seq`, `ts`, `type`, `data`, plus `policy_id`, `producer`, `envelope_version`. Validated on the way in and on the way out; canonical JSON so digests are stable. | [`tracewake/envelope.py`](tracewake/envelope.py) |
-| **Recorder** | Plugs into the orchestrator's `DecisionTrace.subscribe()` for live use (`tracewake live` runs the real orchestrator that way), or publishes recorded JSONL files. Encodes through a codec: canonical JSON by default, or Avro in the Confluent wire format. | [`tracewake/recorder.py`](tracewake/recorder.py), [`tracewake/live.py`](tracewake/live.py), [`tracewake/codec.py`](tracewake/codec.py) |
-| **WakeLedger** | SQLite ledger keyed by `(run_id, seq)`; idempotent ingest; per-run digests, gap detection, and the questions a reviewer asks (irreversible calls, denials, approvals). | [`tracewake/ledger.py`](tracewake/ledger.py) |
-| **PolicyEcho** | Recovers each decision's arguments from the log, recomputes under old and new policy, classifies `unchanged`, `flipped`, `needs-evidence`. Constraint semantics are a line-for-line match of the orchestrator's guard, cross-checked by a test. | [`tracewake/echo.py`](tracewake/echo.py), [`tracewake/policy.py`](tracewake/policy.py) |
-| **ReplayProof** | The eight checks and the report. | [`tracewake/proof.py`](tracewake/proof.py) |
-| **LakeMirror** | The same topic as an Apache Iceberg table, written by AutoMQ's Table Topic on the broker side. Read with PyIceberg through the REST catalog, checked against the ledger, and queried with DuckDB. Two layouts: the envelope as one JSON string column, or typed columns from a registered Avro schema that the broker converts by schema id and flattens. | [`tracewake/lake.py`](tracewake/lake.py) |
+| **TraceEnvelope** | The versioned event: `run_id`, `seq`, `ts`, `type`, `data`, plus `policy_id`, `producer`, `envelope_version`. Validated on the way in and on the way out; canonical JSON so digests are stable. | [`sternwatch/envelope.py`](sternwatch/envelope.py) |
+| **Recorder** | Plugs into the orchestrator's `DecisionTrace.subscribe()` for live use (`sternwatch live` runs the real orchestrator that way), or publishes recorded JSONL files. Encodes through a codec: canonical JSON by default, or Avro in the Confluent wire format. | [`sternwatch/recorder.py`](sternwatch/recorder.py), [`sternwatch/live.py`](sternwatch/live.py), [`sternwatch/codec.py`](sternwatch/codec.py) |
+| **WatchLedger** | SQLite ledger keyed by `(run_id, seq)`; idempotent ingest; per-run digests, gap detection, and the questions a reviewer asks (irreversible calls, denials, approvals). | [`sternwatch/ledger.py`](sternwatch/ledger.py) |
+| **PolicyEcho** | Recovers each decision's arguments from the log, recomputes under old and new policy, classifies `unchanged`, `flipped`, `needs-evidence`. Constraint semantics are a line-for-line match of the orchestrator's guard, cross-checked by a test. | [`sternwatch/echo.py`](sternwatch/echo.py), [`sternwatch/policy.py`](sternwatch/policy.py) |
+| **ReplayProof** | The eight checks and the report. | [`sternwatch/proof.py`](sternwatch/proof.py) |
+| **LakeMirror** | The same topic as an Apache Iceberg table, written by AutoMQ's Table Topic on the broker side. Read with PyIceberg through the REST catalog, checked against the ledger, and queried with DuckDB. Two layouts: the envelope as one JSON string column, or typed columns from a registered Avro schema that the broker converts by schema id and flattens. | [`sternwatch/lake.py`](sternwatch/lake.py) |
 
 ## From the log to SQL
 
 AutoMQ's Table Topic writes a topic into an Iceberg table inside the broker, so there is no connector
-and no second pipeline. TRACEWAKE creates its topic with `automq.table.topic.enable=true` and the
+and no second pipeline. STERNWATCH creates its topic with `automq.table.topic.enable=true` and the
 value converted as a string, which means every row of the table is one TraceEnvelope as JSON text
 next to the message key and the Kafka partition, offset and timestamp, and no schema registry is
 needed. LakeMirror then treats the table as a second witness: the lake holds the raw log, duplicate
@@ -260,7 +260,7 @@ the typed row and matching the ledger's digests.
 
 ## A live agent, streaming
 
-The fixtures prove the replay; `tracewake live` proves the plumbing. It runs the
+The fixtures prove the replay; `sternwatch live` proves the plumbing. It runs the
 [governed-agent-orchestrator](https://github.com/gandhiashutosh14/governed-agent-orchestrator) on five
 objectives with a Recorder subscribed to each run's `DecisionTrace` before the run starts, so every
 decision reaches the log from inside the agent as it happens. In the
@@ -277,10 +277,10 @@ effect. `step_finished` is emitted after the tool has run, so a report can have 
 its completion never reached the log; the orchestrator handles such an exception like a failure of
 the tool call. Likewise, the Recorder's `published` count is the sends handed to the producer, not
 the sends the broker acknowledged: a refused send surfaces when the bus is flushed, which
-`tracewake live` does before it rebuilds the ledger.
+`sternwatch live` does before it rebuilds the ledger.
 
 Each invocation records under new run ids (the prefix carries the UTC time) and rebuilds the ledger
-from the messages of its own runs, so `tracewake live` can be run again against the same topic; a
+from the messages of its own runs, so `sternwatch live` can be run again against the same topic; a
 topic that already holds events under the ids about to be used is refused before any agent runs.
 
 Two design choices worth knowing. Decisions are replayed only when the log holds the arguments
@@ -298,7 +298,7 @@ makes the flip table credible.
   live runs include them. A refusal without recorded arguments replays as `needs-evidence` when the
   new policy constrains a referenced argument.
 - The live recorder needs Python 3.11+, because the orchestrator's approval pause (LangGraph's
-  `interrupt()` in an async node) does; the rest of TRACEWAKE runs on 3.10+.
+  `interrupt()` in an async node) does; the rest of STERNWATCH runs on 3.10+.
 - Nothing here measures AutoMQ's cost or latency. AutoMQ's own figures are AutoMQ's; see their
   documentation.
 - The 42.5 s to visibility is one measurement on one CI run with a 2 s commit interval; AutoMQ's
@@ -306,12 +306,12 @@ makes the flip table credible.
   rows sooner. It is not a latency benchmark.
 - In the typed layout only the fields a reviewer filters on are columns; the rest of the payload stays
   in `data_json`, because event payloads differ by event type.
-- TRACEWAKE is an independent project and is not affiliated with or endorsed by AutoMQ.
+- STERNWATCH is an independent project and is not affiliated with or endorsed by AutoMQ.
 
 ## Project layout
 
 ```
-tracewake/            envelope, bus, codec, recorder, policy, ledger, echo, proof, lake, live, cli
+sternwatch/           envelope, bus, codec, recorder, policy, ledger, echo, proof, lake, live, cli
 policies/             v1.json (the orchestrator's catalog) and v2.json (the changed policy)
 fixtures/orchestrator four recorded runs and PROVENANCE.json
 tests/                92 tests; the in-memory log is enough for all of them
@@ -356,7 +356,7 @@ These are illustrative examples of where the pattern fits. None of them is a dep
 | DecisionTrace | The orchestrator's journal: one numbered event per decision in a run. |
 | Event log | An append-only sequence of messages that readers consume in order; Kafka is the common protocol. |
 | AutoMQ | An open-source implementation of the Kafka protocol that stores data on object storage such as S3. |
-| Partition key | The value that decides which partition a message goes to; TRACEWAKE uses the run id so a run stays ordered. |
+| Partition key | The value that decides which partition a message goes to; STERNWATCH uses the run id so a run stays ordered. |
 | Offset | A message's position in its partition; reading "from offset 0" means reading everything. |
 | Envelope | The wrapper around an event that carries version, producer and policy information. |
 | Policy id | A hash of the rules in force when a decision was made, stamped on every envelope. |
@@ -367,20 +367,20 @@ These are illustrative examples of where the pattern fits. None of them is a dep
 | Table Topic | AutoMQ's feature that writes a topic into an Apache Iceberg table. |
 | Apache Iceberg | An open table format for data lakes: files on object storage plus metadata that makes them behave like a database table. |
 | REST catalog | The service that tells clients where an Iceberg table's current metadata lives; here a small reference implementation from the Iceberg project. |
-| LakeMirror | TRACEWAKE's check that the Iceberg table holds the same evidence as the ledger, and its SQL queries over it. |
+| LakeMirror | STERNWATCH's check that the Iceberg table holds the same evidence as the ledger, and its SQL queries over it. |
 
 ## Further reading
 
 | Resource | What it is | Why it matters here |
 |---|---|---|
-| [AutoMQ](https://github.com/AutoMQ/automq) and its [overview](https://docs.automq.com/automq/what-is-automq/overview) | The Kafka-protocol log on object storage used in CI. | The log TRACEWAKE writes to; the compose file is adapted from theirs. |
+| [AutoMQ](https://github.com/AutoMQ/automq) and its [overview](https://docs.automq.com/automq/what-is-automq/overview) | The Kafka-protocol log on object storage used in CI. | The log STERNWATCH writes to; the compose file is adapted from theirs. |
 | [Agent audit trails: turning AI actions into replayable event streams](https://www.automq.com/blog/agent-audit-trails-turning-ai-actions-into-replayable-event-streams) | AutoMQ's argument for ordered, durable, replayable agent audit records. | The architectural idea this repository turns into runnable, verified code. |
 | [AI workflow replay: debugging decisions with Kafka-compatible streams](https://www.automq.com/blog/ai-workflow-replay-debugging-decisions-with-kafka-compatible-streams) | AutoMQ on replaying agent workflows from streams. | PolicyEcho is a specific form of replay: under a changed policy, with a faithfulness check. |
 | [Apache Kafka design](https://kafka.apache.org/documentation/#design) | Why Kafka keeps ordered, durable, replayable partitions. | The two guarantees the ledger depends on: order within a key and re-readable offsets. |
-| [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html), Martin Fowler | The pattern of storing state as an append-only sequence of events and rebuilding from it. | WakeLedger is event sourcing applied to agent decisions. |
+| [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html), Martin Fowler | The pattern of storing state as an append-only sequence of events and rebuilding from it. | WatchLedger is event sourcing applied to agent decisions. |
 | [Turning the database inside out](https://www.confluent.io/blog/turning-the-database-inside-out-with-apache-samza/), Martin Kleppmann | The log as the source of truth and every other store as a derived view. | The ledger is a derived view; the log is the truth. |
-| [AutoMQ client SDK guide](https://docs.automq.com/automq-cloud/getting-started/client-sdk-guide) | Which Kafka clients AutoMQ recommends. | kafka-python is the listed Python client, which is why TRACEWAKE uses it. |
-| [AutoMQ Table Topic](https://docs.automq.com/automq/table-topic/overview) and its [configuration](https://docs.automq.com/automq/table-topic/table-topic-configuration) | Writing a topic into an Iceberg table from inside the broker; per-topic settings such as `automq.table.topic.enable` and the value conversion. | What `tracewake lake` relies on; the string conversion is why no schema registry is needed. |
+| [AutoMQ client SDK guide](https://docs.automq.com/automq-cloud/getting-started/client-sdk-guide) | Which Kafka clients AutoMQ recommends. | kafka-python is the listed Python client, which is why STERNWATCH uses it. |
+| [AutoMQ Table Topic](https://docs.automq.com/automq/table-topic/overview) and its [configuration](https://docs.automq.com/automq/table-topic/table-topic-configuration) | Writing a topic into an Iceberg table from inside the broker; per-topic settings such as `automq.table.topic.enable` and the value conversion. | What `sternwatch lake` relies on; the string conversion is why no schema registry is needed. |
 | [Apache Iceberg](https://iceberg.apache.org/) and the [Iceberg REST catalog specification](https://iceberg.apache.org/rest-catalog-spec/) | The table format and the catalog protocol the broker and PyIceberg both speak. | LakeMirror reads the table through a REST catalog, the same way Spark or Trino would. |
 | [PyIceberg](https://py.iceberg.apache.org/) and [DuckDB](https://duckdb.org/docs/stable/) | A Python client for Iceberg tables, and an in-process SQL engine that queries Arrow data directly. | Together they replace a Spark cluster in the proof, which keeps the CI job small. |
 | [LangGraph interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts) | How the orchestrator pauses for human approval. | Explains the `approval_required` and `approval_granted` events in the fixtures. |

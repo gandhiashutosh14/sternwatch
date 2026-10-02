@@ -1,4 +1,4 @@
-from tracewake.bus import MemoryBus, partition_for
+from sternwatch.bus import MemoryBus, partition_for
 
 
 def test_same_key_stays_on_one_partition_in_order():

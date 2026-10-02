@@ -1,6 +1,6 @@
 import json
 
-from tracewake.cli import main
+from sternwatch.cli import main
 
 
 def test_demo_writes_both_reports(tmp_path, capsys):

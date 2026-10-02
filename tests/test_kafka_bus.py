@@ -1,7 +1,7 @@
 """KafkaBus behaviour that can be checked without a broker: a refused send must not be silent."""
 import pytest
 
-from tracewake.bus import KafkaBus
+from sternwatch.bus import KafkaBus
 
 
 class FakeFuture:

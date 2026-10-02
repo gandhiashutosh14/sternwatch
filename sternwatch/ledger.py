@@ -1,4 +1,4 @@
-"""WakeLedger: a run's decision ledger, rebuilt from the log alone.
+"""WatchLedger: a run's decision ledger, rebuilt from the log alone.
 
 The ledger is a SQLite table keyed by ``(run_id, seq)``. A consumer may be destroyed and started
 again from offset zero; because every insert is idempotent on that key, re-reading the log, or
@@ -49,7 +49,7 @@ class IngestStats:
         return {"consumed": self.consumed, "inserted": self.inserted, "duplicates": self.duplicates, "invalid": self.invalid}
 
 
-class WakeLedger:
+class WatchLedger:
     def __init__(self, path: str = ":memory:"):
         self.path = path
         self._db = sqlite3.connect(path)

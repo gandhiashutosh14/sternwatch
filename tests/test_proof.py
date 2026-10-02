@@ -1,9 +1,9 @@
 import json
 
-from tracewake.bus import MemoryBus
-from tracewake.policy import Policy
-from tracewake.proof import run_proof
-from tracewake.recorder import load_trace_dir
+from sternwatch.bus import MemoryBus
+from sternwatch.policy import Policy
+from sternwatch.proof import run_proof
+from sternwatch.recorder import load_trace_dir
 
 
 def test_proof_passes_on_the_in_memory_log(fixtures_dir, policies_dir):

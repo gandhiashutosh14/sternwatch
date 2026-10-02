@@ -1,7 +1,7 @@
-from tracewake.bus import MemoryBus
-from tracewake.envelope import digest_envelopes, envelopes_for
-from tracewake.ledger import WakeLedger
-from tracewake.recorder import Recorder, load_trace_dir
+from sternwatch.bus import MemoryBus
+from sternwatch.envelope import digest_envelopes, envelopes_for
+from sternwatch.ledger import WatchLedger
+from sternwatch.recorder import Recorder, load_trace_dir
 
 POLICY = "p1"
 
@@ -17,7 +17,7 @@ def publish_fixtures(bus, topic, fixtures_dir):
 def test_ingest_counts_and_digests_match_the_source(fixtures_dir):
     bus = MemoryBus()
     runs = publish_fixtures(bus, "t", fixtures_dir)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     stats = ledger.ingest(bus, "t")
     total = sum(len(v) for v in runs.values())
     assert (stats.consumed, stats.inserted, stats.duplicates, stats.invalid) == (total, total, 0, 0)
@@ -29,7 +29,7 @@ def test_ingest_counts_and_digests_match_the_source(fixtures_dir):
 def test_duplicate_deliveries_change_nothing(fixtures_dir):
     bus = MemoryBus()
     runs = publish_fixtures(bus, "t", fixtures_dir)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     before = ledger.digests()
     first = sorted(runs)[0]
@@ -45,7 +45,7 @@ def test_gaps_are_reported(fixtures_dir):
     runs = load_trace_dir(str(fixtures_dir))
     run_id = max(runs, key=lambda r: len(runs[r]))  # the longest run, so seq 3 is not its last event
     Recorder(bus, "t").publish_events([e for e in runs[run_id] if e["seq"] != 3])
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     assert ledger.gaps(run_id) == [3]
     assert ledger.summary(run_id)["gaps"] == [3]
@@ -55,7 +55,7 @@ def test_invalid_messages_are_counted_not_stored():
     bus = MemoryBus()
     bus.publish("t", b"k", b"not json at all")
     bus.publish("t", b"k", b'{"run_id": "r", "seq": 0, "ts": "t", "type": "note", "data": {}}')
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     stats = ledger.ingest(bus, "t")
     assert (stats.consumed, stats.inserted, stats.invalid) == (2, 0, 2)
     assert ledger.count() == 0
@@ -64,7 +64,7 @@ def test_invalid_messages_are_counted_not_stored():
 def test_summary_and_reviewer_queries(fixtures_dir):
     bus = MemoryBus()
     publish_fixtures(bus, "t", fixtures_dir)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     statuses = {ledger.summary(r)["status"] for r in ledger.runs()}
     assert "run_finished" in statuses
@@ -77,7 +77,7 @@ def test_summary_and_reviewer_queries(fixtures_dir):
 def test_reset_then_rebuild_from_offset_zero(fixtures_dir):
     bus = MemoryBus()
     publish_fixtures(bus, "t", fixtures_dir)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     digests = ledger.digests()
     ledger.reset()
@@ -90,11 +90,11 @@ def test_file_backed_ledger_persists(tmp_path, fixtures_dir):
     bus = MemoryBus()
     publish_fixtures(bus, "t", fixtures_dir)
     path = str(tmp_path / "ledger.db")
-    ledger = WakeLedger(path)
+    ledger = WatchLedger(path)
     ledger.ingest(bus, "t")
     n, digests = ledger.count(), ledger.digests()
     ledger.close()
-    reopened = WakeLedger(path)
+    reopened = WatchLedger(path)
     assert reopened.count() == n and reopened.digests() == digests
     reopened.close()
 
@@ -102,7 +102,7 @@ def test_file_backed_ledger_persists(tmp_path, fixtures_dir):
 def test_events_round_trip_the_orchestrator_shape(fixtures_dir):
     bus = MemoryBus()
     runs = publish_fixtures(bus, "t", fixtures_dir)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     for run_id, events in runs.items():
         assert ledger.events(run_id) == events

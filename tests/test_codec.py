@@ -11,13 +11,13 @@ import pytest
 pytest.importorskip("fastavro")
 pa = pytest.importorskip("pyarrow")
 
-from tracewake.bus import MemoryBus, Message  # noqa: E402
-from tracewake.cli import main  # noqa: E402
-from tracewake.codec import AVRO_SCHEMA, AvroCodec, JsonCodec, SchemaRegistry, from_avro_record, to_avro_record  # noqa: E402
-from tracewake.envelope import TraceEnvelope  # noqa: E402
-from tracewake.lake import KEY_COL, META_COL, compare, parse_rows, table_topic_configs, typed_queries  # noqa: E402
-from tracewake.ledger import WakeLedger  # noqa: E402
-from tracewake.recorder import Recorder, load_trace_dir  # noqa: E402
+from sternwatch.bus import MemoryBus, Message  # noqa: E402
+from sternwatch.cli import main  # noqa: E402
+from sternwatch.codec import AVRO_SCHEMA, AvroCodec, JsonCodec, SchemaRegistry, from_avro_record, to_avro_record  # noqa: E402
+from sternwatch.envelope import TraceEnvelope  # noqa: E402
+from sternwatch.lake import KEY_COL, META_COL, compare, parse_rows, table_topic_configs, typed_queries  # noqa: E402
+from sternwatch.ledger import WatchLedger  # noqa: E402
+from sternwatch.recorder import Recorder, load_trace_dir  # noqa: E402
 
 
 class FakeRegistry:
@@ -36,7 +36,7 @@ class FakeRegistry:
 
 
 class LocalRegistry(BaseHTTPRequestHandler):
-    """The two registry calls TRACEWAKE makes, served on a local port. Schema id 503 answers HTTP 503,
+    """The two registry calls STERNWATCH makes, served on a local port. Schema id 503 answers HTTP 503,
     as a registry in trouble would; any other id it never issued answers HTTP 404, as Confluent's does."""
 
     def do_POST(self):
@@ -117,10 +117,10 @@ def test_ledger_ingests_through_the_avro_codec(fixtures_dir):
     rec = Recorder(bus, "t", policy_id="p", codec=codec)
     for run_id in sorted(runs):
         rec.publish_events(runs[run_id])
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     stats = ledger.ingest(bus, "t", codec)
     assert stats.inserted == sum(len(v) for v in runs.values()) and stats.invalid == 0
-    json_ledger = WakeLedger()
+    json_ledger = WatchLedger()
     assert json_ledger.ingest(bus, "t").invalid == stats.inserted  # Avro bytes are not JSON: counted, not stored
 
 
@@ -130,7 +130,7 @@ def test_an_unknown_schema_id_is_counted_invalid_and_the_ingest_goes_on(registry
     unknown = reframed(good, 999)                        # an id this registry never issued: HTTP 404
     with pytest.raises(ValueError, match="schema id 999 is unknown to the registry"):
         codec.decode(unknown)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     stats = ledger.ingest_messages([Message("t", 0, i, b"r1", v) for i, v in enumerate([good, unknown, later])], codec)
     assert (stats.consumed, stats.inserted, stats.invalid) == (3, 2, 1)
     assert [e.seq for e in ledger.envelopes("r1")] == [4, 5]
@@ -141,7 +141,7 @@ def test_a_registry_outage_stops_the_ingest_instead_of_invalidating_messages(reg
     good = codec.encode(ENV)
 
     def ingest(schema_id):   # the record under an id the codec has not looked up yet, so the registry is asked
-        return WakeLedger().ingest_messages([Message("t", 0, 0, b"r1", reframed(good, schema_id))], codec)
+        return WatchLedger().ingest_messages([Message("t", 0, 0, b"r1", reframed(good, schema_id))], codec)
 
     with pytest.raises(RuntimeError, match="answered HTTP 503"):
         ingest(503)
@@ -162,8 +162,8 @@ def test_the_ledger_command_rebuilds_a_typed_topic(fixtures_dir, tmp_path, monke
     rec = Recorder(bus, "typed", policy_id="p", codec=AvroCodec(reg, "typed-value"))
     for run_id in sorted(runs):
         rec.publish_events(runs[run_id])
-    monkeypatch.setattr("tracewake.cli.KafkaBus", lambda *args, **kwargs: bus)
-    monkeypatch.setattr("tracewake.codec.SchemaRegistry", lambda url: reg)
+    monkeypatch.setattr("sternwatch.cli.KafkaBus", lambda *args, **kwargs: bus)
+    monkeypatch.setattr("sternwatch.codec.SchemaRegistry", lambda url: reg)
     total = sum(len(v) for v in runs.values())
     argv = ["ledger", "--bootstrap", "unused:9092", "--topic", "typed"]
     assert main(argv + ["--db", str(tmp_path / "typed.db"), "--typed", "--registry", "http://registry.invalid"]) == 0
@@ -188,7 +188,7 @@ def test_typed_table_layout_parses_and_matches_the_ledger(fixtures_dir):
     table = pa.table(cols)
     rows = parse_rows(table)
     assert rows.invalid == 0 and len(rows) == len(msgs)
-    ledger = WakeLedger()
+    ledger = WatchLedger()
     ledger.ingest(bus, "t")
     assert all(c.passed for c in compare(rows, ledger, len(msgs)))
     typed = typed_queries(table)["tool decisions by capability, typed columns only"]["rows"]

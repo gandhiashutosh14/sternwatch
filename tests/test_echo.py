@@ -1,8 +1,8 @@
 import json
 
-from tracewake.echo import ALLOWED, DENIED, FLIPPED, NEEDS_EVIDENCE, UNCHANGED, echo, extract_decisions, replay
-from tracewake.policy import CapabilityPolicy, Policy
-from tracewake.recorder import load_trace_dir
+from sternwatch.echo import ALLOWED, DENIED, FLIPPED, NEEDS_EVIDENCE, UNCHANGED, echo, extract_decisions, replay
+from sternwatch.policy import CapabilityPolicy, Policy
+from sternwatch.recorder import load_trace_dir
 
 
 def load(policies_dir):

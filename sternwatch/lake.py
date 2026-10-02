@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from .envelope import TraceEnvelope, digest_envelopes, validate
-from .ledger import WakeLedger
+from .ledger import WatchLedger
 from .proof import Check
 
 VALUE_COL, KEY_COL, META_COL = "_kafka_value", "_kafka_key", "_kafka_metadata"
@@ -165,7 +165,7 @@ def normalised_table(rows: LakeRows):
     })
 
 
-def compare(rows: LakeRows, ledger: WakeLedger, published: int) -> List[Check]:
+def compare(rows: LakeRows, ledger: WatchLedger, published: int) -> List[Check]:
     """The lake holds the raw log (duplicates included); the ledger holds the de-duplicated run."""
     checks: List[Check] = []
     checks.append(Check("table row count equals the messages published, duplicates included", len(rows) == published,
@@ -304,13 +304,13 @@ class LakeReport:
         return "\n".join(lines)
 
 
-def run_lake(catalog_props: Dict[str, str], namespace: str, topic: str, ledger: WakeLedger, published: int, *,
+def run_lake(catalog_props: Dict[str, str], namespace: str, topic: str, ledger: WatchLedger, published: int, *,
              commit_interval_ms: int, timeout_s: float = 180.0, typed: bool = False) -> LakeReport:
     from pyiceberg.catalog import load_catalog
     import duckdb
     import pyiceberg
 
-    catalog = load_catalog("tracewake", **catalog_props)
+    catalog = load_catalog("sternwatch", **catalog_props)
     table, arrow, waited = wait_for_table(catalog, (namespace, topic), published, timeout_s)
     rows = parse_rows(arrow)
     checks = compare(rows, ledger, published)

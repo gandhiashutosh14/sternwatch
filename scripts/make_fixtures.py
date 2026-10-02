@@ -1,4 +1,4 @@
-"""Record the governed-agent-orchestrator's demo scenarios as TRACEWAKE fixtures.
+"""Record the governed-agent-orchestrator's demo scenarios as STERNWATCH fixtures.
 
 Run with an environment where the orchestrator is installed (its own virtual environment works):
 

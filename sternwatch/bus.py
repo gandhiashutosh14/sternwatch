@@ -1,9 +1,9 @@
 """The log. Two implementations of one small interface.
 
 ``MemoryBus`` is an in-process log with partitions, keys and offsets, so every test and the
-``tracewake demo`` command run without a broker. ``KafkaBus`` is the same interface on
+``sternwatch demo`` command run without a broker. ``KafkaBus`` is the same interface on
 kafka-python, which is how the CI proof runs against a real AutoMQ cluster. Both preserve the one
-property TRACEWAKE depends on: messages with the same key are appended, and read back, in order.
+property STERNWATCH depends on: messages with the same key are appended, and read back, in order.
 """
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ class MemoryBus:
 class KafkaBus:
     """The same interface on a Kafka-compatible broker (AutoMQ in CI) through kafka-python."""
 
-    def __init__(self, bootstrap: str, partitions: int = 3, client_id: str = "tracewake",
+    def __init__(self, bootstrap: str, partitions: int = 3, client_id: str = "sternwatch",
                  request_timeout_ms: int = 30000, ready_timeout_s: float = 60.0,
                  topic_configs: Optional[Dict[str, str]] = None):
         self.bootstrap = bootstrap

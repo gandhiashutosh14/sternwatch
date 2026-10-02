@@ -26,8 +26,8 @@ MAGIC = 0
 AVRO_SCHEMA: Dict[str, Any] = {
     "type": "record",
     "name": "TraceEnvelope",
-    "namespace": "io.github.gandhiashutosh14.tracewake",
-    "doc": "One decision event of an agent run, as published by TRACEWAKE.",
+    "namespace": "io.github.gandhiashutosh14.sternwatch",
+    "doc": "One decision event of an agent run, as published by STERNWATCH.",
     "fields": [
         {"name": "id", "type": "string", "doc": "run_id:seq"},
         {"name": "run_id", "type": "string"},
@@ -90,7 +90,7 @@ def _error_detail(e: urllib.error.HTTPError) -> str:
 
 
 class SchemaRegistry:
-    """The two calls TRACEWAKE needs from a Confluent-compatible schema registry, over plain HTTP.
+    """The two calls STERNWATCH needs from a Confluent-compatible schema registry, over plain HTTP.
 
     A schema id the registry does not know (HTTP 404) is a fault in one message: ``schema`` raises
     ValueError, which the ledger counts as that message being invalid before it goes on to the next.

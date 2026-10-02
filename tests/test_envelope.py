@@ -1,6 +1,6 @@
 import pytest
 
-from tracewake.envelope import TraceEnvelope, digest_envelopes, validate
+from sternwatch.envelope import TraceEnvelope, digest_envelopes, validate
 
 EVENT = {"seq": 1, "ts": "2026-09-19T00:00:00+00:00", "run_id": "r1", "type": "run_started", "data": {"objective": "x"}}
 

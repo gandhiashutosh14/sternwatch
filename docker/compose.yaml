@@ -1,4 +1,4 @@
-# Single-node AutoMQ with MinIO as its object storage, for TRACEWAKE's CI proof and local runs.
+# Single-node AutoMQ with MinIO as its object storage, for STERNWATCH's CI proof and local runs.
 #
 # Adapted from AutoMQ's docker/docker-compose.yaml at tag 1.7.4 (Apache License 2.0,
 # https://github.com/AutoMQ/automq/blob/1.7.4/docker/docker-compose.yaml). Changes: the broker
@@ -10,7 +10,7 @@
 #
 #   docker compose -f docker/compose.yaml up -d
 #   python scripts/wait_for_broker.py localhost:9092
-#   tracewake proof --bootstrap localhost:9092
+#   sternwatch proof --bootstrap localhost:9092
 #   docker compose -f docker/compose.yaml down -v
 
 services:
